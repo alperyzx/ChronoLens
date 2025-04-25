@@ -8,7 +8,6 @@
 - Event Display: Display historical events in collapsible cards, grouped by category, showing the title, date, and description. Apply CSS fade-in animations for card expansion.
 - View Toggle: Include a toggle switch for "Today" (historical events for the current date in past years) vs. "This Week" (historical events for the current ISO week in past years) views. Persist the toggle state in localStorage.
 - Night Mode: Implement a night mode feature that switches on and off based on the user's system default settings.
-- RSS Feed Subscription: Add an RSS feed icon at the top right to allow visitors to subscribe for updates.
 
 ## Style Guidelines:
 
@@ -26,8 +25,6 @@
 - Politics: Gavel (hammer shape).
 - Art: Paintbrush (diagonal brush stroke).
 - Night Mode: Dark background with light text for better readability in low-light conditions, activated based on user system preferences.
-- RSS Feed: Place the RSS feed icon at the top right corner of the page for easy access.
-- RSS Feed: Use a standard RSS feed icon.
 
 ## Original User Request:
 Today in History Project Specification
