@@ -201,100 +201,104 @@ export default function Home() {
       </div>
       
       {/* Modern animated background */}
-      <div className="absolute inset-0 -z-10 overflow-hidden">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(120,119,198,0.1),rgba(255,255,255,0))]"></div>
+      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(120,119,198,0.15),rgba(255,255,255,0))]"></div>
         
-        {/* Floating geometric shapes */}
-        <div className="absolute inset-0">
-          {/* Large floating circles */}
-          <div className="absolute top-20 left-10 w-32 h-32 bg-gradient-to-br from-indigo-400/10 to-blue-500/10 rounded-full animate-pulse opacity-60">
-            <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '20s'}}>
-              <div className="w-4 h-4 bg-indigo-400/20 rounded-full absolute top-2 left-1/2 transform -translate-x-1/2"></div>
+        {/* Content-aligned floating geometric shapes */}
+        <div className="container mx-auto px-4 h-full relative">
+          <div className="max-w-6xl mx-auto h-full relative">
+            {/* Large floating circles */}
+            <div className="absolute top-20 left-8 w-32 h-32 bg-gradient-to-br from-indigo-400/20 to-blue-500/20 rounded-full animate-pulse opacity-80">
+              <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '20s'}}>
+                <div className="w-4 h-4 bg-indigo-400/40 rounded-full absolute top-2 left-1/2 transform -translate-x-1/2"></div>
+              </div>
             </div>
-          </div>
-          
-          <div className="absolute top-32 right-20 w-24 h-24 bg-gradient-to-br from-purple-400/10 to-pink-500/10 rounded-full animate-pulse opacity-50" style={{animationDelay: '2s'}}>
-            <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '25s', animationDirection: 'reverse'}}>
-              <div className="w-3 h-3 bg-purple-400/20 rounded-full absolute bottom-2 right-2"></div>
+            
+            <div className="absolute top-32 right-8 w-24 h-24 bg-gradient-to-br from-purple-400/20 to-pink-500/20 rounded-full animate-pulse opacity-70" style={{animationDelay: '2s'}}>
+              <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '25s', animationDirection: 'reverse'}}>
+                <div className="w-3 h-3 bg-purple-400/40 rounded-full absolute bottom-2 right-2"></div>
+              </div>
             </div>
-          </div>
-          
-          <div className="absolute bottom-40 left-1/4 w-20 h-20 bg-gradient-to-br from-cyan-400/10 to-teal-500/10 rounded-full animate-pulse opacity-40" style={{animationDelay: '4s'}}>
-            <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '30s'}}>
-              <div className="w-2 h-2 bg-cyan-400/20 rounded-full absolute top-1 left-1"></div>
+            
+            <div className="absolute bottom-40 left-1/4 w-20 h-20 bg-gradient-to-br from-cyan-400/20 to-teal-500/20 rounded-full animate-pulse opacity-60" style={{animationDelay: '4s'}}>
+              <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '30s'}}>
+                <div className="w-2 h-2 bg-cyan-400/40 rounded-full absolute top-1 left-1"></div>
+              </div>
             </div>
+            
+            {/* Floating squares and diamonds */}
+            <div className="absolute top-1/3 right-1/3 w-8 h-8 bg-gradient-to-br from-emerald-400/25 to-green-500/25 rotate-45 animate-bounce opacity-50" style={{animationDuration: '8s', animationDelay: '1s'}}></div>
+            
+            <div className="absolute bottom-1/3 right-1/4 w-6 h-6 bg-gradient-to-br from-amber-400/25 to-orange-500/25 rotate-12 animate-bounce opacity-45" style={{animationDuration: '12s', animationDelay: '3s'}}></div>
+            
+            <div className="absolute top-2/3 left-1/3 w-10 h-10 bg-gradient-to-br from-rose-400/25 to-pink-500/25 rotate-45 animate-bounce opacity-55" style={{animationDuration: '10s', animationDelay: '2s'}}></div>
+            
+            {/* Small floating dots */}
+            <div className="absolute top-16 right-1/2 w-2 h-2 bg-indigo-400/50 rounded-full animate-ping opacity-80" style={{animationDelay: '0s', animationDuration: '4s'}}></div>
+            <div className="absolute top-1/2 left-16 w-1.5 h-1.5 bg-purple-400/50 rounded-full animate-ping opacity-70" style={{animationDelay: '1s', animationDuration: '5s'}}></div>
+            <div className="absolute bottom-1/4 right-16 w-3 h-3 bg-cyan-400/50 rounded-full animate-ping opacity-60" style={{animationDelay: '2s', animationDuration: '6s'}}></div>
+            <div className="absolute top-3/4 left-1/2 w-2 h-2 bg-emerald-400/50 rounded-full animate-ping opacity-65" style={{animationDelay: '3s', animationDuration: '4.5s'}}></div>
+            <div className="absolute top-40 right-1/3 w-1 h-1 bg-amber-400/50 rounded-full animate-ping opacity-55" style={{animationDelay: '1.5s', animationDuration: '7s'}}></div>
+            
+            {/* Subtle moving lines aligned with content */}
+            <div className="absolute top-1/4 left-0 w-px h-32 bg-gradient-to-b from-transparent via-indigo-400/40 to-transparent opacity-50 animate-pulse" style={{animationDelay: '2s'}}></div>
+            <div className="absolute top-1/2 right-0 w-px h-24 bg-gradient-to-b from-transparent via-purple-400/40 to-transparent opacity-45 animate-pulse" style={{animationDelay: '4s'}}></div>
+            <div className="absolute bottom-1/3 left-1/2 w-24 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent opacity-40 animate-pulse" style={{animationDelay: '1s'}}></div>
           </div>
-          
-          {/* Floating squares and diamonds */}
-          <div className="absolute top-1/3 right-1/3 w-8 h-8 bg-gradient-to-br from-emerald-400/15 to-green-500/15 rotate-45 animate-bounce opacity-30" style={{animationDuration: '8s', animationDelay: '1s'}}></div>
-          
-          <div className="absolute bottom-1/3 right-1/4 w-6 h-6 bg-gradient-to-br from-amber-400/15 to-orange-500/15 rotate-12 animate-bounce opacity-25" style={{animationDuration: '12s', animationDelay: '3s'}}></div>
-          
-          <div className="absolute top-2/3 left-1/3 w-10 h-10 bg-gradient-to-br from-rose-400/15 to-pink-500/15 rotate-45 animate-bounce opacity-35" style={{animationDuration: '10s', animationDelay: '2s'}}></div>
-          
-          {/* Small floating dots */}
-          <div className="absolute top-16 right-1/2 w-2 h-2 bg-indigo-400/30 rounded-full animate-ping opacity-60" style={{animationDelay: '0s', animationDuration: '4s'}}></div>
-          <div className="absolute top-1/2 left-20 w-1.5 h-1.5 bg-purple-400/30 rounded-full animate-ping opacity-50" style={{animationDelay: '1s', animationDuration: '5s'}}></div>
-          <div className="absolute bottom-1/4 right-10 w-3 h-3 bg-cyan-400/30 rounded-full animate-ping opacity-40" style={{animationDelay: '2s', animationDuration: '6s'}}></div>
-          <div className="absolute top-3/4 left-1/2 w-2 h-2 bg-emerald-400/30 rounded-full animate-ping opacity-45" style={{animationDelay: '3s', animationDuration: '4.5s'}}></div>
-          <div className="absolute top-40 left-3/4 w-1 h-1 bg-amber-400/30 rounded-full animate-ping opacity-35" style={{animationDelay: '1.5s', animationDuration: '7s'}}></div>
-          
-          {/* Subtle moving lines */}
-          <div className="absolute top-1/4 left-0 w-px h-32 bg-gradient-to-b from-transparent via-indigo-400/20 to-transparent opacity-30 animate-pulse" style={{animationDelay: '2s'}}></div>
-          <div className="absolute top-1/2 right-0 w-px h-24 bg-gradient-to-b from-transparent via-purple-400/20 to-transparent opacity-25 animate-pulse" style={{animationDelay: '4s'}}></div>
-          <div className="absolute bottom-1/3 left-1/2 w-24 h-px bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent opacity-20 animate-pulse" style={{animationDelay: '1s'}}></div>
         </div>
         
-        {/* Original SVG with enhanced elements */}
-        <div className="absolute inset-0">
-          <svg className="w-full h-full opacity-20" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style={{stopColor:"rgb(99, 102, 241)", stopOpacity:0.15}} />
-                <stop offset="100%" style={{stopColor:"rgb(14, 165, 233)", stopOpacity:0.15}} />
-              </linearGradient>
-              <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style={{stopColor:"rgb(147, 51, 234)", stopOpacity:0.1}} />
-                <stop offset="100%" style={{stopColor:"rgb(219, 39, 119)", stopOpacity:0.1}} />
-              </linearGradient>
-              <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style={{stopColor:"rgb(6, 182, 212)", stopOpacity:0.1}} />
-                <stop offset="100%" style={{stopColor:"rgb(16, 185, 129)", stopOpacity:0.1}} />
-              </linearGradient>
-            </defs>
-            
-            {/* Main floating orbs */}
-            <circle cx="100" cy="100" r="50" fill="url(#grad1)" className="animate-pulse">
-              <animate attributeName="r" values="30;50;30" dur="4s" repeatCount="indefinite"/>
-              <animateTransform attributeName="transform" type="translate" values="0,0; 20,10; 0,0" dur="15s" repeatCount="indefinite"/>
-            </circle>
-            
-            <circle cx="800" cy="200" r="40" fill="url(#grad2)" className="animate-pulse" style={{animationDelay: '1s'}}>
-              <animate attributeName="r" values="25;40;25" dur="5s" repeatCount="indefinite"/>
-              <animateTransform attributeName="transform" type="translate" values="0,0; -15,25; 0,0" dur="18s" repeatCount="indefinite"/>
-            </circle>
-            
-            <circle cx="200" cy="800" r="35" fill="url(#grad1)" className="animate-pulse" style={{animationDelay: '2s'}}>
-              <animate attributeName="r" values="20;35;20" dur="3.5s" repeatCount="indefinite"/>
-              <animateTransform attributeName="transform" type="translate" values="0,0; 30,-10; 0,0" dur="20s" repeatCount="indefinite"/>
-            </circle>
-            
-            {/* Additional smaller elements */}
-            <circle cx="600" cy="500" r="25" fill="url(#grad3)" className="animate-pulse" style={{animationDelay: '3s'}}>
-              <animate attributeName="r" values="15;25;15" dur="6s" repeatCount="indefinite"/>
-              <animateTransform attributeName="transform" type="translate" values="0,0; -20,15; 0,0" dur="22s" repeatCount="indefinite"/>
-            </circle>
-            
-            <circle cx="300" cy="300" r="20" fill="url(#grad2)" className="animate-pulse" style={{animationDelay: '4s'}}>
-              <animate attributeName="r" values="10;20;10" dur="4.5s" repeatCount="indefinite"/>
-              <animateTransform attributeName="transform" type="translate" values="0,0; 25,-20; 0,0" dur="25s" repeatCount="indefinite"/>
-            </circle>
-            
-            <circle cx="700" cy="700" r="30" fill="url(#grad3)" className="animate-pulse" style={{animationDelay: '5s'}}>
-              <animate attributeName="r" values="18;30;18" dur="5.5s" repeatCount="indefinite"/>
-              <animateTransform attributeName="transform" type="translate" values="0,0; -10,20; 0,0" dur="16s" repeatCount="indefinite"/>
-            </circle>
-          </svg>
+        {/* SVG animations aligned with content width */}
+        <div className="container mx-auto px-4 h-full relative">
+          <div className="max-w-6xl mx-auto h-full relative">
+            <svg className="w-full h-full opacity-40" viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
+              <defs>
+                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style={{stopColor:"rgb(99, 102, 241)", stopOpacity:0.25}} />
+                  <stop offset="100%" style={{stopColor:"rgb(14, 165, 233)", stopOpacity:0.25}} />
+                </linearGradient>
+                <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style={{stopColor:"rgb(147, 51, 234)", stopOpacity:0.2}} />
+                  <stop offset="100%" style={{stopColor:"rgb(219, 39, 119)", stopOpacity:0.2}} />
+                </linearGradient>
+                <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style={{stopColor:"rgb(6, 182, 212)", stopOpacity:0.2}} />
+                  <stop offset="100%" style={{stopColor:"rgb(16, 185, 129)", stopOpacity:0.2}} />
+                </linearGradient>
+              </defs>
+              
+              {/* Main floating orbs positioned within content bounds */}
+              <circle cx="100" cy="80" r="50" fill="url(#grad1)" className="animate-pulse">
+                <animate attributeName="r" values="30;50;30" dur="4s" repeatCount="indefinite"/>
+                <animateTransform attributeName="transform" type="translate" values="0,0; 20,10; 0,0" dur="15s" repeatCount="indefinite"/>
+              </circle>
+              
+              <circle cx="1000" cy="120" r="40" fill="url(#grad2)" className="animate-pulse" style={{animationDelay: '1s'}}>
+                <animate attributeName="r" values="25;40;25" dur="5s" repeatCount="indefinite"/>
+                <animateTransform attributeName="transform" type="translate" values="0,0; -15,25; 0,0" dur="18s" repeatCount="indefinite"/>
+              </circle>
+              
+              <circle cx="200" cy="600" r="35" fill="url(#grad1)" className="animate-pulse" style={{animationDelay: '2s'}}>
+                <animate attributeName="r" values="20;35;20" dur="3.5s" repeatCount="indefinite"/>
+                <animateTransform attributeName="transform" type="translate" values="0,0; 30,-10; 0,0" dur="20s" repeatCount="indefinite"/>
+              </circle>
+              
+              {/* Additional smaller elements within content area */}
+              <circle cx="600" cy="300" r="25" fill="url(#grad3)" className="animate-pulse" style={{animationDelay: '3s'}}>
+                <animate attributeName="r" values="15;25;15" dur="6s" repeatCount="indefinite"/>
+                <animateTransform attributeName="transform" type="translate" values="0,0; -20,15; 0,0" dur="22s" repeatCount="indefinite"/>
+              </circle>
+              
+              <circle cx="300" cy="200" r="20" fill="url(#grad2)" className="animate-pulse" style={{animationDelay: '4s'}}>
+                <animate attributeName="r" values="10;20;10" dur="4.5s" repeatCount="indefinite"/>
+                <animateTransform attributeName="transform" type="translate" values="0,0; 25,-20; 0,0" dur="25s" repeatCount="indefinite"/>
+              </circle>
+              
+              <circle cx="900" cy="500" r="30" fill="url(#grad3)" className="animate-pulse" style={{animationDelay: '5s'}}>
+                <animate attributeName="r" values="18;30;18" dur="5.5s" repeatCount="indefinite"/>
+                <animateTransform attributeName="transform" type="translate" values="0,0; -10,20; 0,0" dur="16s" repeatCount="indefinite"/>
+              </circle>
+            </svg>
+          </div>
         </div>
       </div>
       
@@ -328,7 +332,7 @@ export default function Home() {
             <Accordion type="multiple" className="space-y-6">
               {categories.map((category) => (
                 <AccordionItem key={category} value={category} className="border-0">
-                  <Card className="overflow-hidden border-0 shadow-xl bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
+                  <Card className="overflow-hidden border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
                     <AccordionTrigger className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180">
                       <div 
                         className="relative h-32 overflow-hidden w-full"
