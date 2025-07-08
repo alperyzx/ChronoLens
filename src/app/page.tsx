@@ -180,27 +180,6 @@ export default function Home() {
     <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900 antialiased">
       <Navigation />
       
-      {/* Day/Week Toggle - Top Right, Aligned with Content */}
-      <div className="fixed top-4 right-4 xl:right-[calc((100vw-1200px)/2+1rem)] z-50">
-        <button 
-          onClick={toggleView}
-          className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-xl p-3 shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-200 hover:scale-105"
-          title={isTodayView ? "Switch to Week View" : "Switch to Today View"}
-        >
-          {isTodayView ? (
-            // Today Icon - Calendar with dot
-            <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              <circle cx="12" cy="15" r="2" fill="currentColor" />
-            </svg>
-          ) : (
-            // Week Icon - Grid
-            <svg className="w-6 h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-            </svg>
-          )}
-        </button>
-      </div>
       
       {/* Modern animated background */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
@@ -307,7 +286,28 @@ export default function Home() {
       {/* Header - Sticky */}
       <div className="sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20">
         <div className="container mx-auto px-4 py-4">
-          <div className="max-w-6xl mx-auto">
+          <div className="max-w-6xl mx-auto relative">
+            {/* Day/Week Toggle - Top Right, Aligned with Content */}
+            <div className="absolute -top-2 right-0 z-50">
+              <button 
+                onClick={toggleView}
+                className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-lg p-2.5 shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-200 hover:scale-105"
+                title={isTodayView ? "Switch to Week View" : "Switch to Today View"}
+              >
+                {isTodayView ? (
+                  // Today Icon - Calendar with dot
+                  <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    <circle cx="12" cy="15" r="2" fill="currentColor" />
+                  </svg>
+                ) : (
+                  // Week Icon - Grid
+                  <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                  </svg>
+                )}
+              </button>
+            </div>
             <div className="flex flex-col items-start">
               <div className="flex items-center space-x-3 mb-1">
                 <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -315,7 +315,7 @@ export default function Home() {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-400 dark:to-blue-400 bg-clip-text text-transparent">
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-300 dark:to-blue-300 bg-clip-text text-transparent">
                   ChronoLens
                 </h1>
               </div>
