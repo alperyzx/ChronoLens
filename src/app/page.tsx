@@ -400,36 +400,36 @@ export default function Home() {
                               <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-lg transition-all duration-200 hover:scale-[1.01]">
                                 <CardContent className="p-6">
                                   <div className="space-y-4">
-                                    <div className="flex items-start space-x-4">
-                                      <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg">
-                                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                        </svg>
+                                    {/* Header with title and calendar icon as source link */}
+                                    <div className="flex items-start justify-between">
+                                      <div className="flex-1 pr-4">
+                                        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
+                                          {event.title}
+                                        </h3>
+                                        <div className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium px-2 py-0.5 rounded-md inline-block">
+                                          {event.date}
+                                        </div>
                                       </div>
-                                      <div className="flex-1 min-w-0">
-                                        <div className="flex items-start justify-between mb-2">
-                                          <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                                            {event.title}
-                                          </h3>
-                                          {event.source && (
-                                            <a 
-                                              href={event.source} 
-                                              target="_blank" 
-                                              rel="noopener noreferrer" 
-                                              className="ml-2 text-xs text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium flex items-center space-x-1 hover:underline transition-colors"
-                                            >
-                                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                              </svg>
-                                              <span>Source</span>
-                                            </a>
-                                          )}
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                          <div className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-sm font-medium px-3 py-1 rounded-full">
-                                            {event.date}
+                                      <div className="flex-shrink-0">
+                                        {event.source ? (
+                                          <a 
+                                            href={event.source} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer" 
+                                            className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/icon"
+                                            title={`View source for ${event.title}`}
+                                          >
+                                            <svg className="w-4 h-4 text-white group-hover/icon:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
+                                          </a>
+                                        ) : (
+                                          <div className="w-8 h-8 bg-gradient-to-br from-slate-400 to-slate-500 rounded-lg flex items-center justify-center shadow-md opacity-50">
+                                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                            </svg>
                                           </div>
-                                        </div>
+                                        )}
                                       </div>
                                     </div>
                                     <div className="w-full">

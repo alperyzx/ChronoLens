@@ -47,7 +47,7 @@ export function Footer() {
                 ChronoLens
               </span>
             </div>
-            <div className="flex items-center space-x-6 text-sm text-slate-500 dark:text-slate-400">
+            <div className="flex items-center space-x-4 text-xs text-slate-500 dark:text-slate-400">
               <span>Powered by Gemini AI</span>
               <span>•</span>
               <span>Built with Next.js</span>
