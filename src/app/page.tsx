@@ -50,82 +50,38 @@ const categoryBackgrounds = {
   Art: "https://picsum.photos/1920/305",
 };
 
-// Cache utility functions
-const cacheUtils = {
-  getItem: (key: string) => {
-    if (typeof window === 'undefined') return null;
-    try {
-      const item = localStorage.getItem(key);
-      return item ? JSON.parse(item) : null;
-    } catch (e) {
-      console.error('Cache get error:', e);
-      return null;
-    }
-  },
-  setItem: (key: string, value: any, expiryMs: number) => {
-    if (typeof window === 'undefined') return;
-    try {
-      const item = {
-        value,
-        expiry: Date.now() + expiryMs,
-      };
-      localStorage.setItem(key, JSON.stringify(item));
-    } catch (e) {
-      console.error('Cache set error:', e);
-    }
-  },
-  isValid: (key: string) => {
-    if (typeof window === 'undefined') return false;
-    try {
-      const itemStr = localStorage.getItem(key);
-      if (!itemStr) return false;
-      
-      const item = JSON.parse(itemStr);
-      return Date.now() < item.expiry;
-    } catch (e) {
-      console.error('Cache validation error:', e);
-      return false;
-    }
-  },
-  getTtl: () => {
-    // Cache until midnight Turkey Time
-    const now = new Date();
-    const turkeyTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Istanbul' }));
-    const midnightTurkey = new Date(turkeyTime);
-    midnightTurkey.setDate(turkeyTime.getDate() + 1);
-    midnightTurkey.setHours(0, 0, 0, 0);
-    return midnightTurkey.getTime() - turkeyTime.getTime();
-  }
-};
-
-async function getHistoricalEventsForCategory(category: string, isTodayView: boolean): Promise<HistoricalEvent[]> {
+async function getHistoricalEventsForCategory(category: string, isTodayView: boolean): Promise<{events: HistoricalEvent[], cached: boolean}> {
   const today = new Date();
   const dateString = today.toISOString().slice(0, 10);
   const viewType = isTodayView ? 'today' : 'week';
-  const cacheKey = `historicalEvents_${viewType}_${category}_${dateString}`;
-  
-  // Return cached data if valid
-  if (cacheUtils.isValid(cacheKey)) {
-    const cachedData = cacheUtils.getItem(cacheKey);
-    if (cachedData && cachedData.value) {
-      return cachedData.value;
-    }
-  }
   
   try {
-    const events = await generateHistoricalEvents({
-      date: isTodayView ? dateString : 'This Week',
-      category: category as any,
-    });
+    // Call our cached API endpoint instead of direct AI call
+    const response = await fetch(`/api/historical-events?date=${dateString}&category=${category}&viewType=${viewType}`);
     
-    // Only cache non-empty results to allow retries on failures
-    if (events.length > 0) {
-      cacheUtils.setItem(cacheKey, events, cacheUtils.getTtl());
+    if (!response.ok) {
+      throw new Error(`API request failed: ${response.status}`);
     }
-    return events;
+    
+    const result = await response.json();
+    
+    if (result.error) {
+      throw new Error(result.error);
+    }
+    
+    // Log cache status for monitoring
+    console.log(`${category} events ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
+    
+    return {
+      events: result.data || [],
+      cached: result.cached || false
+    };
   } catch (error) {
     console.error(`Failed to fetch events for category: ${category}`, error);
-    return []; // Return empty events array on failure
+    return {
+      events: [],
+      cached: false
+    }; // Return empty events array on failure
   }
 }
 
@@ -133,9 +89,11 @@ export default function Home() {
   const [isTodayView, setIsTodayView] = useState(true);
   const [historicalEvents, setHistoricalEvents] = useState<CategoryEvents>({});
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
+  const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
   const categories: Array<"Sociology" | "Technology" | "Philosophy" | "Science" | "Politics" | "Art"> = ["Sociology", "Technology", "Philosophy", "Science", "Politics", "Art"];
   
   useEffect(() => {
+    // Load saved view preference
     if (typeof window !== "undefined") {
       const storedView = localStorage.getItem("isTodayView");
       if (storedView) {
@@ -145,6 +103,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    // Save view preference
     if (typeof window !== "undefined") {
       localStorage.setItem("isTodayView", String(isTodayView));
     }
@@ -154,10 +113,14 @@ export default function Home() {
     setLoadingCategories(prev => ({ ...prev, [category]: true }));
     
     try {
-      const events = await getHistoricalEventsForCategory(category, isTodayView);
+      const {events, cached} = await getHistoricalEventsForCategory(category, isTodayView);
       setHistoricalEvents(prev => ({
         ...prev,
         [category]: events
+      }));
+      setCacheStatus(prev => ({
+        ...prev,
+        [category]: cached
       }));
     } catch (error) {
       console.error(`Failed to fetch events for ${category}`, error);
@@ -173,6 +136,9 @@ export default function Home() {
       initialLoadingState[cat] = true;
     });
     setLoadingCategories(initialLoadingState);
+    
+    // Reset cache status
+    setCacheStatus({});
     
     // Fetch each category independently
     categories.forEach(fetchCategoryEvents);
@@ -224,6 +190,11 @@ export default function Home() {
                   <h2 className="text-xl font-semibold flex items-center mb-2 text-white relative z-10 drop-shadow-md">
                     {categoryIcons[category as keyof typeof categoryIcons]}
                     {category}
+                    {cacheStatus[category] && (
+                      <span className="ml-2 text-xs bg-green-500/80 px-2 py-1 rounded-full">
+                        Cached
+                      </span>
+                    )}
                   </h2>
                 </AccordionTrigger>
                 <AccordionContent>
