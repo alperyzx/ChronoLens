@@ -9,7 +9,6 @@ import { generateHistoricalEvents } from "@/ai/flows/generate-historical-events"
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Toaster } from "@/components/ui/toaster";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Navigation, Footer } from "@/components/navigation";
@@ -181,8 +180,8 @@ export default function Home() {
     <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900 antialiased">
       <Navigation />
       
-      {/* Day/Week Toggle - Mobile Friendly */}
-      <div className="fixed top-3 left-3 md:top-4 md:left-4 z-50">
+      {/* Day/Week Toggle - Top Right, Aligned with Content */}
+      <div className="fixed top-4 right-4 xl:right-[calc((100vw-1200px)/2+1rem)] z-50">
         <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-xl px-3 py-2 shadow-lg">
           <div className="flex items-center space-x-2">
             <span className={`text-sm font-medium transition-colors select-none ${isTodayView ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>
@@ -202,24 +201,98 @@ export default function Home() {
       </div>
       
       {/* Modern animated background */}
-      <div className="absolute inset-0 -z-10">
+      <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(120,119,198,0.1),rgba(255,255,255,0))]"></div>
+        
+        {/* Floating geometric shapes */}
         <div className="absolute inset-0">
-          <svg className="w-full h-full opacity-30" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
+          {/* Large floating circles */}
+          <div className="absolute top-20 left-10 w-32 h-32 bg-gradient-to-br from-indigo-400/10 to-blue-500/10 rounded-full animate-pulse opacity-60">
+            <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '20s'}}>
+              <div className="w-4 h-4 bg-indigo-400/20 rounded-full absolute top-2 left-1/2 transform -translate-x-1/2"></div>
+            </div>
+          </div>
+          
+          <div className="absolute top-32 right-20 w-24 h-24 bg-gradient-to-br from-purple-400/10 to-pink-500/10 rounded-full animate-pulse opacity-50" style={{animationDelay: '2s'}}>
+            <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '25s', animationDirection: 'reverse'}}>
+              <div className="w-3 h-3 bg-purple-400/20 rounded-full absolute bottom-2 right-2"></div>
+            </div>
+          </div>
+          
+          <div className="absolute bottom-40 left-1/4 w-20 h-20 bg-gradient-to-br from-cyan-400/10 to-teal-500/10 rounded-full animate-pulse opacity-40" style={{animationDelay: '4s'}}>
+            <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '30s'}}>
+              <div className="w-2 h-2 bg-cyan-400/20 rounded-full absolute top-1 left-1"></div>
+            </div>
+          </div>
+          
+          {/* Floating squares and diamonds */}
+          <div className="absolute top-1/3 right-1/3 w-8 h-8 bg-gradient-to-br from-emerald-400/15 to-green-500/15 rotate-45 animate-bounce opacity-30" style={{animationDuration: '8s', animationDelay: '1s'}}></div>
+          
+          <div className="absolute bottom-1/3 right-1/4 w-6 h-6 bg-gradient-to-br from-amber-400/15 to-orange-500/15 rotate-12 animate-bounce opacity-25" style={{animationDuration: '12s', animationDelay: '3s'}}></div>
+          
+          <div className="absolute top-2/3 left-1/3 w-10 h-10 bg-gradient-to-br from-rose-400/15 to-pink-500/15 rotate-45 animate-bounce opacity-35" style={{animationDuration: '10s', animationDelay: '2s'}}></div>
+          
+          {/* Small floating dots */}
+          <div className="absolute top-16 right-1/2 w-2 h-2 bg-indigo-400/30 rounded-full animate-ping opacity-60" style={{animationDelay: '0s', animationDuration: '4s'}}></div>
+          <div className="absolute top-1/2 left-20 w-1.5 h-1.5 bg-purple-400/30 rounded-full animate-ping opacity-50" style={{animationDelay: '1s', animationDuration: '5s'}}></div>
+          <div className="absolute bottom-1/4 right-10 w-3 h-3 bg-cyan-400/30 rounded-full animate-ping opacity-40" style={{animationDelay: '2s', animationDuration: '6s'}}></div>
+          <div className="absolute top-3/4 left-1/2 w-2 h-2 bg-emerald-400/30 rounded-full animate-ping opacity-45" style={{animationDelay: '3s', animationDuration: '4.5s'}}></div>
+          <div className="absolute top-40 left-3/4 w-1 h-1 bg-amber-400/30 rounded-full animate-ping opacity-35" style={{animationDelay: '1.5s', animationDuration: '7s'}}></div>
+          
+          {/* Subtle moving lines */}
+          <div className="absolute top-1/4 left-0 w-px h-32 bg-gradient-to-b from-transparent via-indigo-400/20 to-transparent opacity-30 animate-pulse" style={{animationDelay: '2s'}}></div>
+          <div className="absolute top-1/2 right-0 w-px h-24 bg-gradient-to-b from-transparent via-purple-400/20 to-transparent opacity-25 animate-pulse" style={{animationDelay: '4s'}}></div>
+          <div className="absolute bottom-1/3 left-1/2 w-24 h-px bg-gradient-to-r from-transparent via-cyan-400/20 to-transparent opacity-20 animate-pulse" style={{animationDelay: '1s'}}></div>
+        </div>
+        
+        {/* Original SVG with enhanced elements */}
+        <div className="absolute inset-0">
+          <svg className="w-full h-full opacity-20" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" style={{stopColor:"rgb(99, 102, 241)", stopOpacity:0.1}} />
-                <stop offset="100%" style={{stopColor:"rgb(14, 165, 233)", stopOpacity:0.1}} />
+                <stop offset="0%" style={{stopColor:"rgb(99, 102, 241)", stopOpacity:0.15}} />
+                <stop offset="100%" style={{stopColor:"rgb(14, 165, 233)", stopOpacity:0.15}} />
+              </linearGradient>
+              <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style={{stopColor:"rgb(147, 51, 234)", stopOpacity:0.1}} />
+                <stop offset="100%" style={{stopColor:"rgb(219, 39, 119)", stopOpacity:0.1}} />
+              </linearGradient>
+              <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style={{stopColor:"rgb(6, 182, 212)", stopOpacity:0.1}} />
+                <stop offset="100%" style={{stopColor:"rgb(16, 185, 129)", stopOpacity:0.1}} />
               </linearGradient>
             </defs>
+            
+            {/* Main floating orbs */}
             <circle cx="100" cy="100" r="50" fill="url(#grad1)" className="animate-pulse">
-              <animate attributeName="r" values="30;50;30" dur="3s" repeatCount="indefinite"/>
+              <animate attributeName="r" values="30;50;30" dur="4s" repeatCount="indefinite"/>
+              <animateTransform attributeName="transform" type="translate" values="0,0; 20,10; 0,0" dur="15s" repeatCount="indefinite"/>
             </circle>
-            <circle cx="800" cy="200" r="40" fill="url(#grad1)" className="animate-pulse" style={{animationDelay: '1s'}}>
-              <animate attributeName="r" values="25;40;25" dur="4s" repeatCount="indefinite"/>
+            
+            <circle cx="800" cy="200" r="40" fill="url(#grad2)" className="animate-pulse" style={{animationDelay: '1s'}}>
+              <animate attributeName="r" values="25;40;25" dur="5s" repeatCount="indefinite"/>
+              <animateTransform attributeName="transform" type="translate" values="0,0; -15,25; 0,0" dur="18s" repeatCount="indefinite"/>
             </circle>
+            
             <circle cx="200" cy="800" r="35" fill="url(#grad1)" className="animate-pulse" style={{animationDelay: '2s'}}>
               <animate attributeName="r" values="20;35;20" dur="3.5s" repeatCount="indefinite"/>
+              <animateTransform attributeName="transform" type="translate" values="0,0; 30,-10; 0,0" dur="20s" repeatCount="indefinite"/>
+            </circle>
+            
+            {/* Additional smaller elements */}
+            <circle cx="600" cy="500" r="25" fill="url(#grad3)" className="animate-pulse" style={{animationDelay: '3s'}}>
+              <animate attributeName="r" values="15;25;15" dur="6s" repeatCount="indefinite"/>
+              <animateTransform attributeName="transform" type="translate" values="0,0; -20,15; 0,0" dur="22s" repeatCount="indefinite"/>
+            </circle>
+            
+            <circle cx="300" cy="300" r="20" fill="url(#grad2)" className="animate-pulse" style={{animationDelay: '4s'}}>
+              <animate attributeName="r" values="10;20;10" dur="4.5s" repeatCount="indefinite"/>
+              <animateTransform attributeName="transform" type="translate" values="0,0; 25,-20; 0,0" dur="25s" repeatCount="indefinite"/>
+            </circle>
+            
+            <circle cx="700" cy="700" r="30" fill="url(#grad3)" className="animate-pulse" style={{animationDelay: '5s'}}>
+              <animate attributeName="r" values="18;30;18" dur="5.5s" repeatCount="indefinite"/>
+              <animateTransform attributeName="transform" type="translate" values="0,0; -10,20; 0,0" dur="16s" repeatCount="indefinite"/>
             </circle>
           </svg>
         </div>
@@ -228,20 +301,22 @@ export default function Home() {
       {/* Header - Sticky */}
       <div className="sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20">
         <div className="container mx-auto px-4 py-6">
-          <div className="flex flex-col items-center text-center">
-            <div className="flex items-center space-x-3 mb-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+          <div className="max-w-6xl mx-auto">
+            <div className="flex flex-col items-start">
+              <div className="flex items-center space-x-3 mb-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
+                  ChronoLens
+                </h1>
               </div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
-                ChronoLens
-              </h1>
+              <p className="text-slate-600 dark:text-slate-300 text-base">
+                Discover historical events across {isTodayView ? "today" : "this week"} in different subjects
+              </p>
             </div>
-            <p className="text-slate-600 dark:text-slate-300 text-base">
-              Discover historical events across {isTodayView ? "today" : "this week"} in different subjects
-            </p>
           </div>
         </div>
       </div>
@@ -249,12 +324,12 @@ export default function Home() {
       {/* Main Content */}
       <div className="container mx-auto px-4 pb-8 relative z-10">
         <div className="max-w-6xl mx-auto">
-          <ScrollArea className="h-[calc(100vh-12rem)] w-full">
+          <div className="w-full">
             <Accordion type="multiple" className="space-y-6">
               {categories.map((category) => (
                 <AccordionItem key={category} value={category} className="border-0">
                   <Card className="overflow-hidden border-0 shadow-xl bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
-                    <AccordionTrigger className="hover:no-underline p-0 [&[data-state=open]>div>div>div>div>svg]:rotate-180">
+                    <AccordionTrigger className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180">
                       <div 
                         className="relative h-32 overflow-hidden w-full"
                         style={{
@@ -286,17 +361,10 @@ export default function Home() {
                           </div>
                           
                           <div className="flex items-center space-x-3">
-                            {cacheStatus[category] && (
-                              <div className="bg-emerald-500/90 backdrop-blur-sm text-white text-xs font-medium px-3 py-1.5 rounded-full border border-emerald-400/50">
-                                <div className="flex items-center space-x-1">
-                                  <div className="w-2 h-2 bg-emerald-300 rounded-full animate-pulse"></div>
-                                  <span>Cached</span>
-                                </div>
-                              </div>
-                            )}
-                            <div className="w-8 h-8 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center border border-white/30">
-                              <svg className="w-4 h-4 text-white transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                            {/* Custom subtle expand/collapse arrow */}
+                            <div className="w-7 h-7 bg-white/15 backdrop-blur-sm rounded-md flex items-center justify-center border border-white/20">
+                              <svg className="w-3.5 h-3.5 text-white/90 transition-transform duration-300 ease-out" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 9l6 6 6-6" />
                               </svg>
                             </div>
                           </div>
@@ -390,7 +458,7 @@ export default function Home() {
                 </AccordionItem>
               ))}
             </Accordion>
-          </ScrollArea>
+          </div>
         </div>
       </div>
       <Footer />
