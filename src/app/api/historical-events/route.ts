@@ -51,8 +51,8 @@ export async function GET(request: NextRequest) {
     const key = generateCacheKey(cacheKey);
 
     // Check cache first
-    if (hasValidCache(key)) {
-      const cachedData = getCacheData(key);
+    if (await hasValidCache(key)) {
+      const cachedData = await getCacheData(key);
       if (cachedData) {
         return NextResponse.json({
           data: cachedData,
@@ -92,7 +92,7 @@ export async function GET(request: NextRequest) {
 
     // Only cache successful responses with data
     if (cachedEvents.length > 0) {
-      setCacheData(key, cachedEvents, viewType as 'today' | 'week');
+      await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
     }
 
     return NextResponse.json({

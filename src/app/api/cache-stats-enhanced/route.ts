@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getCacheStats, clearCache, getCacheExpirationInfo } from '@/lib/cache';
+import { getCacheStats, clearCache, getCacheExpirationInfo, cleanupExpiredCache } from '@/lib/cache';
 
 export async function GET() {
   try {
-    const stats = getCacheStats();
+    const stats = await getCacheStats();
     const todayExpiration = getCacheExpirationInfo('today');
     const weekExpiration = getCacheExpirationInfo('week');
     
@@ -34,13 +34,31 @@ export async function GET() {
 
 export async function DELETE() {
   try {
-    clearCache();
+    await clearCache();
     return NextResponse.json({
       message: 'Cache cleared successfully',
       timestamp: new Date().toISOString()
     });
   } catch (error) {
     console.error('Error clearing cache:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST() {
+  try {
+    await cleanupExpiredCache();
+    const stats = await getCacheStats();
+    return NextResponse.json({
+      message: 'Expired cache cleaned up successfully',
+      stats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error cleaning up expired cache:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
