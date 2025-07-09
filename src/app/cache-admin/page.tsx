@@ -8,6 +8,10 @@ import { Navigation, Footer } from "@/components/navigation";
 
 interface CacheStats {
   keys: number;
+  expired?: number;
+  totalFiles?: number;
+  totalSizeBytes?: number;
+  totalSizeMB?: number;
   hits: number;
   misses: number;
   hitRate: number;
@@ -30,6 +34,7 @@ export default function CacheAdmin() {
   const [stats, setStats] = useState<CacheStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [cleaning, setCleaning] = useState(false);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -57,6 +62,20 @@ export default function CacheAdmin() {
       console.error('Failed to clear cache:', error);
     } finally {
       setClearing(false);
+    }
+  };
+
+  const cleanupExpiredCache = async () => {
+    setCleaning(true);
+    try {
+      const response = await fetch('/api/cache-stats-enhanced', { method: 'POST' });
+      if (response.ok) {
+        await fetchStats(); // Refresh stats after cleanup
+      }
+    } catch (error) {
+      console.error('Failed to cleanup expired cache:', error);
+    } finally {
+      setCleaning(false);
     }
   };
 
@@ -115,9 +134,21 @@ export default function CacheAdmin() {
             ) : stats ? (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Cached Keys:</span>
+                  <span className="text-sm font-medium">Valid Keys:</span>
                   <Badge variant="secondary">{stats.keys}</Badge>
                 </div>
+                {stats.expired !== undefined && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Expired Keys:</span>
+                    <Badge variant="outline">{stats.expired}</Badge>
+                  </div>
+                )}
+                {stats.totalSizeMB !== undefined && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Cache Size:</span>
+                    <Badge variant="secondary">{stats.totalSizeMB} MB</Badge>
+                  </div>
+                )}
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-medium">Cache Hits:</span>
                   <Badge variant="default">{stats.hits}</Badge>
@@ -187,6 +218,19 @@ export default function CacheAdmin() {
             </div>
             <div>
               <Button 
+                onClick={cleanupExpiredCache} 
+                disabled={cleaning}
+                className="w-full mb-2"
+                variant="outline"
+              >
+                {cleaning ? "Cleaning..." : "Cleanup Expired Cache"}
+              </Button>
+              <p className="text-xs text-muted-foreground mb-4">
+                Removes only expired cache files while keeping valid ones.
+              </p>
+            </div>
+            <div>
+              <Button 
                 onClick={clearCache} 
                 disabled={clearing}
                 className="w-full"
@@ -208,15 +252,16 @@ export default function CacheAdmin() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
-            <p><strong>Cache Strategy:</strong> Server-side adaptive cache using node-cache</p>
+            <p><strong>Cache Strategy:</strong> File-based persistent cache (survives server restarts)</p>
             <p><strong>TTL Policy:</strong></p>
             <ul className="ml-4 space-y-1">
               <li>• <strong>Today view:</strong> Cache expires at midnight (daily refresh)</li>
               <li>• <strong>Week view:</strong> Cache expires at end of week/Sunday (weekly refresh)</li>
             </ul>
-            <p><strong>Cache Keys:</strong> Format: events_[viewType]_[category]_[date]</p>
-            <p><strong>Benefits:</strong> Minimizes Gemini API requests, shared cache across all users</p>
-            <p><strong>Storage:</strong> In-memory cache (resets on server restart)</p>
+            <p><strong>Cache Keys:</strong> Format: chronolens_events_[viewType]_[category]_[date]</p>
+            <p><strong>Benefits:</strong> Minimizes Gemini API requests, survives server restarts, shared cache across all users</p>
+            <p><strong>Storage:</strong> File-based cache in system temp directory (persistent)</p>
+            <p><strong>Solution:</strong> Fixes Google Cloud server restart cache reset issues</p>
           </div>
         </CardContent>
       </Card>

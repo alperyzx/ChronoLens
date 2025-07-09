@@ -1,103 +1,172 @@
 # Cache Implementation for ChronoLens
 
 ## Overview
-Implemented a server-side daily cache system to minimize Gemini API requests and improve performance for all users.
+Implemented a **persistent file-based cache system** to minimize Gemini API requests and improve performance for all users. This solution **fixes the Google Cloud server restart issue** where the in-memory cache was reset.
+
+## Problem Solved
+- **Google Cloud Server Restarts**: Low traffic causes servers to spin down/restart, resetting in-memory cache
+- **Cache Persistence**: File-based cache survives server restarts
+- **Performance**: Maintains fast response times even after server restarts
 
 ## Architecture
 
-### Before (Client-side caching)
-- Each user had their own localStorage cache
-- Every new visitor triggered API calls
-- No shared cache across users
-- Limited cache coordination
+### Before (In-memory caching)
+- Used node-cache for in-memory storage
+- Cache reset on every server restart
+- Lost all cached data when Google Cloud spun down servers
+- Required fresh API calls after restarts
 
-### After (Server-side caching)
-- Centralized server-side cache using node-cache
-- Single API call per day per category serves all users
-- Automatic daily cache expiration at midnight
-- Shared cache across all application users
+### After (File-based caching)
+- **Persistent file-based cache** using filesystem
+- **Survives server restarts** and deployments
+- Automatic cleanup of expired cache files
+- Graceful degradation if cache operations fail
 
 ## Implementation Details
 
-### 1. Cache Service (`src/lib/cache.ts`)
+### 1. Cache Service (`src/lib/cache.ts` & `src/lib/cache-file.ts`)
+- **Persistent Storage**: Files stored in system temp directory or custom `CACHE_DIR`
 - **Adaptive TTL Strategy**: 
   - **Today view**: Cache expires at midnight (daily refresh)
   - **Week view**: Cache expires at end of week/Sunday (weekly refresh)
-- **Key Format**: `events_[viewType]_[category]_[date]`
-- **Memory Storage**: In-memory cache (resets on server restart)
-- **Statistics**: Tracks hits, misses, and hit rates
+- **Key Format**: `chronolens_events_[viewType]_[category]_[date]`
+- **File Format**: JSON files with data, expiration timestamp, and metadata
+- **Statistics**: Tracks cache size, expired files, and storage usage
 - **Expiration Info**: Provides detailed cache expiration times for monitoring
+- **Auto-cleanup**: Expired files are automatically removed
 
-### 2. API Routes
-- **`/api/historical-events`**: Main endpoint for fetching cached events with adaptive TTL
-- **`/api/cache-stats`**: Basic admin endpoint for monitoring cache performance
-- **`/api/cache-stats-enhanced`**: Enhanced admin endpoint with expiration information
+### 2. Cache Strategies Available
 
-### 3. Client Updates (`src/app/page.tsx`)
-- Removed client-side localStorage cache for events
-- Updated to use server-side API endpoints
-- Added cache status indicators in UI
-- Maintained localStorage for user preferences (view toggle)
+#### File-based Cache (Default - Recommended)
+- **Location**: `src/lib/cache-file.ts`
+- **Persistence**: Survives server restarts
+- **Storage**: Filesystem-based JSON files
+- **Benefits**: No external dependencies, automatic persistence
+- **Environment**: `USE_FILE_CACHE=true` (default)
 
-### 4. Admin Interface (`/cache-admin`)
-- Real-time cache statistics monitoring
-- Cache management controls
-- Performance metrics dashboard
+#### Redis Cache (Optional - Production Scale)
+- **Location**: `src/lib/cache-redis.ts`
+- **Persistence**: External Redis server required
+- **Storage**: Redis key-value store
+- **Benefits**: Distributed cache, high performance, cluster support
+- **Environment**: `USE_REDIS_CACHE=true` + `REDIS_URL`
+
+### 3. API Routes (Updated for Async)
+- **`/api/historical-events`**: Main endpoint with async cache operations
+- **`/api/cache-stats`**: Basic admin endpoint + cleanup function (POST)
+- **`/api/cache-stats-enhanced`**: Enhanced admin endpoint with cleanup (POST)
+
+### 4. Client Updates
+- No changes required on client side
+- API interface remains the same
+- Cache operations are transparent to frontend
+
+### 5. Admin Interface (`/cache-admin`)
+- **Enhanced Statistics**: File count, storage size, expired files
+- **Cleanup Function**: Remove only expired cache files
+- **Clear All**: Complete cache reset
+- **Real-time Monitoring**: Updated cache information display
 
 ## Cache Behavior
 
-### Cache Hit (Subsequent Requests)
+### Cache Hit (Persistent)
 1. User requests historical events
-2. Server checks cache for existing data
-3. Returns cached data if valid (before expiration)
-4. Response includes `cached: true` flag
+2. Server reads cache file from disk
+3. Checks expiration timestamp
+4. Returns cached data if still valid
+5. Response includes `cached: true` flag
 
-### Cache Miss (First Request of Period)
+### Cache Miss (Fresh Data)
 1. User requests historical events
-2. Server finds no valid cache entry
-3. Makes fresh Gemini API call
-4. Stores response in cache with appropriate TTL:
-   - **Today view**: Until midnight
-   - **Week view**: Until end of week (Sunday)
+2. Server finds no valid cache file (missing or expired)
+3. Makes fresh Gemini AI API call
+4. Stores response as JSON file with expiration metadata
 5. Returns fresh data with `cached: false` flag
 
-### TTL Calculation
-- **Daily (Today view)**: Cache until next midnight
-- **Weekly (Week view)**: Cache until next Sunday at midnight
+### File Management
+- **Creation**: JSON files created with unique names per cache key
+- **Expiration**: Files include expiration timestamp for validation
+- **Cleanup**: Expired files automatically deleted on access
+- **Storage**: Configurable directory (`CACHE_DIR` environment variable)
+
+## Configuration
+
+### Environment Variables
+```bash
+# File cache (default - enabled)
+USE_FILE_CACHE=true
+
+# Custom cache directory (optional)
+CACHE_DIR=/path/to/persistent/cache
+
+# Redis cache (optional - for scale)
+USE_REDIS_CACHE=false
+REDIS_URL=redis://localhost:6379
+```
+
+### Cache Directory
+- **Default**: System temp directory (`os.tmpdir()`)
+- **Custom**: Set `CACHE_DIR` environment variable
+- **Production**: Use persistent mounted storage for `CACHE_DIR`
 
 ## Benefits
 
+### Persistence & Reliability
+- **Server Restart Resilience**: Cache survives Google Cloud server restarts
+- **Deployment Stability**: Cache persists through application deployments
+- **Data Consistency**: Shared cache across all application instances
+
 ### Performance
-- **Faster Response Times**: Cached responses are near-instantaneous
+- **Faster Response Times**: Cached responses from disk are still very fast
 - **Reduced Latency**: No AI API calls for cached data
-- **Better User Experience**: Consistent loading times
+- **Better User Experience**: Consistent performance after restarts
 
 ### Cost Optimization
 - **Minimized API Calls**: 
   - **Today view**: Maximum 6 API calls per day (one per category)
   - **Week view**: Maximum 6 API calls per week (one per category)
-- **Shared Resources**: Single API call serves unlimited users for the cache period
-- **Efficient Resource Usage**: Adaptive server-side cache management
+- **Persistent Savings**: API call reduction maintained across restarts
+- **Efficient Resource Usage**: Disk-based storage with automatic cleanup
 
 ### Scalability
-- **Multi-user Support**: Shared cache across all users
-- **Memory Efficient**: Single cache entry per category/view/date
-- **Auto-cleanup**: Daily cache expiration prevents memory bloat
+- **Multi-instance Support**: Shared file cache across server instances
+- **Storage Efficient**: Automatic cleanup of expired files
+- **Configurable**: Flexible storage location and management
 
-## Monitoring
+## Monitoring & Management
 
-### Cache Statistics Available
-- **Keys Count**: Number of cached entries
-- **Hit Rate**: Percentage of requests served from cache
-- **Hits/Misses**: Request fulfillment metrics
-- **Timestamp**: Last statistics update
+### Enhanced Cache Statistics
+- **Valid Keys**: Number of active cache entries
+- **Expired Files**: Number of expired cache files awaiting cleanup
+- **Storage Size**: Total cache storage usage in MB
+- **Hit Rate**: Cache performance metrics
 
 ### Admin Dashboard Features
-- Real-time cache statistics
-- Cache expiration information for both view types
-- Cache clearing functionality
-- Performance monitoring
-- Cache behavior insights
+- **Real-time Statistics**: Updated cache information with file metrics
+- **Selective Cleanup**: Remove only expired files while keeping valid cache
+- **Complete Reset**: Clear all cache files for fresh start
+- **Storage Monitoring**: Track cache size and file count
+- **Expiration Tracking**: Monitor cache expiration schedules
+
+### Maintenance Operations
+- **Automatic Cleanup**: Expired files removed during normal operations
+- **Manual Cleanup**: Admin interface provides cleanup button
+- **Cache Reset**: Complete cache clearing for troubleshooting
+- **Storage Management**: Monitor and manage cache storage usage
+
+## Troubleshooting
+
+### Cache Issues
+- **File Permissions**: Ensure write access to cache directory
+- **Storage Space**: Monitor available disk space for cache files
+- **Directory Access**: Verify `CACHE_DIR` is accessible if custom path used
+
+### Performance
+- **Disk I/O**: File cache has minimal disk I/O overhead
+- **Storage Location**: Use fast storage for cache directory if possible
+- **Cleanup Frequency**: Regular cleanup prevents storage bloat
+
+This implementation solves the **Google Cloud server restart cache reset problem** while maintaining excellent performance and API cost optimization.
 - TTL tracking for today vs week views
 
 ## Configuration
