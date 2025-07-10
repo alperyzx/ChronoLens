@@ -378,11 +378,14 @@ export default function Home() {
                   ChronoLens
                 </h1>
               </div>
-              {!isHeaderShrunken && (
-                <p className="text-slate-600 dark:text-slate-300 text-base opacity-100 transition-all duration-300 ease-in-out">
-                  Discover historical events across {isTodayView ? "today" : "this week"} in different subjects
-                </p>
-              )}
+              <p className={cn(
+                "text-slate-600 dark:text-slate-300 text-base transition-all duration-300 ease-in-out overflow-hidden",
+                isHeaderShrunken 
+                  ? "opacity-0 max-h-0 transform scale-y-0 origin-top" 
+                  : "opacity-100 max-h-8 transform scale-y-100 origin-top"
+              )}>
+                Discover historical events across {isTodayView ? "today" : "this week"}
+              </p>
             </div>
           </div>
         </div>
