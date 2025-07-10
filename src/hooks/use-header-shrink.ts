@@ -2,13 +2,19 @@
 
 import { useState, useEffect } from 'react';
 
-export function useHeaderShrink(threshold: number = 50) {
+export function useHeaderShrink(threshold: number = 100) {
   const [isShrunken, setIsShrunken] = useState(false);
 
   useEffect(() => {
     const handleScroll = () => {
       const scrollY = window.scrollY;
-      setIsShrunken(scrollY > threshold);
+      
+      // Add hysteresis to prevent rapid toggling
+      if (!isShrunken && scrollY > threshold) {
+        setIsShrunken(true);
+      } else if (isShrunken && scrollY < threshold - 20) {
+        setIsShrunken(false);
+      }
     };
 
     // Add scroll event listener
@@ -21,7 +27,7 @@ export function useHeaderShrink(threshold: number = 50) {
     return () => {
       window.removeEventListener('scroll', handleScroll);
     };
-  }, [threshold]);
+  }, [threshold, isShrunken]);
 
   return isShrunken;
 }
