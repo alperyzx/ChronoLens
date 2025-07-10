@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/toaster";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Navigation, Footer } from "@/components/navigation";
+import { useHeaderShrink } from "@/hooks/use-header-shrink";
 
 // Define types for our events
 type HistoricalEvent = {
@@ -115,6 +116,7 @@ export default function Home() {
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
   const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
   const categories: Array<"Sociology" | "Technology" | "Philosophy" | "Science" | "Politics" | "Art"> = ["Sociology", "Technology", "Philosophy", "Science", "Politics", "Art"];
+  const isHeaderShrunken = useHeaderShrink(80);
   
   useEffect(() => {
     // Load saved view preference
@@ -177,7 +179,7 @@ export default function Home() {
   };
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900 antialiased">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900 antialiased flex flex-col">
       <Navigation />
       
       
@@ -284,60 +286,88 @@ export default function Home() {
       </div>
       
       {/* Header - Sticky */}
-      <div className="sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20">
-        <div className="container mx-auto px-4 py-4">
+      <div className={cn(
+        "sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out",
+        isHeaderShrunken ? "py-2" : "py-4"
+      )}>
+        <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto relative">
             {/* Day/Week Toggle - Top Right, Aligned with Content */}
-            <div className="absolute -top-2 right-0 z-50">
+            <div className={cn(
+              "absolute right-0 z-50 transition-all duration-300 ease-in-out",
+              isHeaderShrunken ? "-top-1" : "-top-2"
+            )}>
               <button 
                 onClick={toggleView}
-                className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-lg p-2.5 shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-200 hover:scale-105"
+                className={cn(
+                  "bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-lg shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-200 hover:scale-105",
+                  isHeaderShrunken ? "p-1.5" : "p-2.5"
+                )}
                 title={isTodayView ? "Switch to Week View" : "Switch to Today View"}
               >
-                {isTodayView ? (
-                  // Today Icon - Calendar with dot
-                  <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    <circle cx="12" cy="15" r="2" fill="currentColor" />
-                  </svg>
-                ) : (
-                  // Week Icon - Grid
-                  <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                  </svg>
-                )}
+                <div className={cn(
+                  "transition-all duration-300 ease-in-out",
+                  isHeaderShrunken ? "w-4 h-4" : "w-5 h-5"
+                )}>
+                  {isTodayView ? (
+                    // Today Icon - Calendar with dot
+                    <svg className="w-full h-full text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      <circle cx="12" cy="15" r="2" fill="currentColor" />
+                    </svg>
+                  ) : (
+                    // Week Icon - Grid
+                    <svg className="w-full h-full text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                    </svg>
+                  )}
+                </div>
               </button>
             </div>
             <div className="flex flex-col items-start">
-              <div className="flex items-center space-x-3 mb-1">
-                <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className={cn(
+                "flex items-center space-x-3 transition-all duration-300 ease-in-out",
+                isHeaderShrunken ? "mb-0" : "mb-1"
+              )}>
+                <div className={cn(
+                  "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 ease-in-out",
+                  isHeaderShrunken ? "w-6 h-6" : "w-8 h-8"
+                )}>
+                  <svg className={cn(
+                    "text-white transition-all duration-300 ease-in-out",
+                    isHeaderShrunken ? "w-3.5 h-3.5" : "w-5 h-5"
+                  )} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-300 dark:to-blue-300 bg-clip-text text-transparent">
+                <h1 className={cn(
+                  "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-300 dark:to-blue-300 bg-clip-text text-transparent transition-all duration-300 ease-in-out",
+                  isHeaderShrunken ? "text-xl" : "text-3xl"
+                )}>
                   ChronoLens
                 </h1>
               </div>
-              <p className="text-slate-600 dark:text-slate-300 text-base">
-                Discover historical events across {isTodayView ? "today" : "this week"} in different subjects
-              </p>
+              {!isHeaderShrunken && (
+                <p className="text-slate-600 dark:text-slate-300 text-base opacity-100 transition-all duration-300 ease-in-out">
+                  Discover historical events across {isTodayView ? "today" : "this week"} in different subjects
+                </p>
+              )}
             </div>
           </div>
         </div>
       </div>
       
       {/* Main Content */}
-      <div className="container mx-auto px-4 pb-8 relative z-10">
+      <div className="container mx-auto px-4 pb-8 relative z-10 flex-1">
         <div className="max-w-6xl mx-auto">
           <div className="w-full">
-            <Accordion type="multiple" className="space-y-6">
+            <Accordion type="multiple" className="space-y-4">
               {categories.map((category) => (
                 <AccordionItem key={category} value={category} className="border-0">
-                  <Card className="overflow-hidden border-0 shadow-xl bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-2xl transition-all duration-300 hover:scale-[1.02]">
+                  <Card className="overflow-hidden border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
                     <AccordionTrigger className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180">
                       <div 
-                        className="relative h-32 overflow-hidden w-full"
+                        className="relative h-20 overflow-hidden w-full"
                         style={{
                           background: categoryBackgrounds[category as keyof typeof categoryBackgrounds],
                         }}
@@ -346,16 +376,16 @@ export default function Home() {
                         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent"></div>
                         
                         {/* Category header */}
-                        <div className="absolute inset-0 flex items-center justify-between p-6">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center border border-white/30">
+                        <div className="absolute inset-0 flex items-center justify-between p-4">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center border border-white/30">
                               {categoryIcons[category as keyof typeof categoryIcons]}
                             </div>
                             <div>
-                              <h2 className="text-2xl font-bold text-white drop-shadow-lg">
+                              <h2 className="text-xl font-bold text-white drop-shadow-lg">
                                 {category}
                               </h2>
-                              <p className="text-white/80 text-sm">
+                              <p className="text-white/80 text-xs">
                                 {loadingCategories[category] 
                                   ? "Loading events..." 
                                   : historicalEvents[category] 
@@ -366,10 +396,10 @@ export default function Home() {
                             </div>
                           </div>
                           
-                          <div className="flex items-center space-x-3">
+                          <div className="flex items-center space-x-2">
                             {/* Custom subtle expand/collapse arrow */}
-                            <div className="w-7 h-7 bg-white/15 backdrop-blur-sm rounded-md flex items-center justify-center border border-white/20">
-                              <svg className="w-3.5 h-3.5 text-white/90 transition-transform duration-300 ease-out" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="w-6 h-6 bg-white/15 backdrop-blur-sm rounded-md flex items-center justify-center border border-white/20">
+                              <svg className="w-3 h-3 text-white/90 transition-transform duration-300 ease-out" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 9l6 6 6-6" />
                               </svg>
                             </div>
@@ -380,14 +410,14 @@ export default function Home() {
                     
                     {/* Content */}
                     <AccordionContent className="p-0">
-                      <div className="p-6">
+                      <div className="p-4">
                         {loadingCategories[category] ? (
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                             {[...Array(3)].map((_, index) => (
-                              <div key={index} className="flex space-x-4">
-                                <Skeleton className="h-16 w-16 rounded-xl" />
+                              <div key={index} className="flex space-x-3">
+                                <Skeleton className="h-12 w-12 rounded-lg" />
                                 <div className="flex-1 space-y-2">
-                                  <Skeleton className="h-4 w-3/4" />
+                                  <Skeleton className="h-3 w-3/4" />
                                   <Skeleton className="h-3 w-1/2" />
                                   <Skeleton className="h-3 w-full" />
                                 </div>
@@ -395,15 +425,15 @@ export default function Home() {
                             ))}
                           </div>
                         ) : historicalEvents[category] && historicalEvents[category].length > 0 ? (
-                          <div className="space-y-4">
+                          <div className="space-y-3">
                             {historicalEvents[category].map((event: any, index: number) => (
-                              <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-lg transition-all duration-200 hover:scale-[1.01]">
-                                <CardContent className="p-6">
-                                  <div className="space-y-4">
+                              <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-md transition-all duration-200 hover:scale-[1.005]">
+                                <CardContent className="p-4">
+                                  <div className="space-y-3">
                                     {/* Header with title and calendar icon as source link */}
                                     <div className="flex items-start justify-between">
-                                      <div className="flex-1 pr-4">
-                                        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
+                                      <div className="flex-1 pr-3">
+                                        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
                                           {event.title}
                                         </h3>
                                         <div className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium px-2 py-0.5 rounded-md inline-block">
@@ -416,16 +446,16 @@ export default function Home() {
                                             href={event.source} 
                                             target="_blank" 
                                             rel="noopener noreferrer" 
-                                            className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/icon"
+                                            className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/icon"
                                             title={`View source for ${event.title}`}
                                           >
-                                            <svg className="w-4 h-4 text-white group-hover/icon:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-3.5 h-3.5 text-white group-hover/icon:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                             </svg>
                                           </a>
                                         ) : (
-                                          <div className="w-8 h-8 bg-gradient-to-br from-slate-400 to-slate-500 rounded-lg flex items-center justify-center shadow-md opacity-50">
-                                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <div className="w-7 h-7 bg-gradient-to-br from-slate-400 to-slate-500 rounded-lg flex items-center justify-center shadow-md opacity-50">
+                                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                             </svg>
                                           </div>
@@ -433,7 +463,7 @@ export default function Home() {
                                       </div>
                                     </div>
                                     <div className="w-full">
-                                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm">
                                         {event.description}
                                       </p>
                                     </div>
@@ -443,13 +473,13 @@ export default function Home() {
                             ))}
                           </div>
                         ) : (
-                          <div className="text-center py-12">
-                            <div className="w-16 h-16 mx-auto mb-4 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
-                              <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className="text-center py-8">
+                            <div className="w-12 h-12 mx-auto mb-3 bg-slate-100 dark:bg-slate-700 rounded-full flex items-center justify-center">
+                              <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
                             </div>
-                            <p className="text-slate-500 dark:text-slate-400 text-lg mb-4">No historical events found</p>
+                            <p className="text-slate-500 dark:text-slate-400 text-base mb-3">No historical events found</p>
                             <Button 
                               onClick={() => fetchCategoryEvents(category)} 
                               variant="outline" 
