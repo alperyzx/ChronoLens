@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
@@ -115,8 +115,38 @@ export default function Home() {
   const [historicalEvents, setHistoricalEvents] = useState<CategoryEvents>({});
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
   const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
+  const [openAccordions, setOpenAccordions] = useState<string[]>([]);
   const categories: Array<"Sociology" | "Technology" | "Philosophy" | "Science" | "Politics" | "Art"> = ["Sociology", "Technology", "Philosophy", "Science", "Politics", "Art"];
   const isHeaderShrunken = useHeaderShrink(80);
+  const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Handle accordion value changes and smooth scroll
+  const handleAccordionChange = (value: string[]) => {
+    const newlyOpened = value.filter(v => !openAccordions.includes(v));
+    setOpenAccordions(value);
+    
+    // If a new accordion was opened, scroll it to the top
+    if (newlyOpened.length > 0) {
+      const newAccordion = newlyOpened[0];
+      const element = accordionRefs.current[newAccordion];
+      if (element) {
+        // Add a small delay to allow the accordion to open
+        setTimeout(() => {
+          const rect = element.getBoundingClientRect();
+          const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+          // Calculate offset based on header size and add padding
+          const headerHeight = isHeaderShrunken ? 80 : 120; // Adjust based on header shrink state
+          const padding = 20; // Additional spacing
+          const targetPosition = rect.top + scrollTop - headerHeight - padding;
+          
+          window.scrollTo({
+            top: Math.max(0, targetPosition), // Ensure we don't scroll to negative position
+            behavior: 'smooth'
+          });
+        }, 150);
+      }
+    }
+  };
   
   useEffect(() => {
     // Load saved view preference
@@ -361,9 +391,19 @@ export default function Home() {
       <div className="container mx-auto px-4 pb-8 relative z-10 flex-1">
         <div className="max-w-6xl mx-auto">
           <div className="w-full">
-            <Accordion type="multiple" className="space-y-4">
+            <Accordion 
+              type="multiple" 
+              className="space-y-4"
+              value={openAccordions}
+              onValueChange={handleAccordionChange}
+            >
               {categories.map((category) => (
-                <AccordionItem key={category} value={category} className="border-0">
+                <AccordionItem 
+                  key={category} 
+                  value={category} 
+                  className="border-0"
+                  ref={(el) => { accordionRefs.current[category] = el; }}
+                >
                   <Card className="overflow-hidden border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
                     <AccordionTrigger className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180">
                       <div 
