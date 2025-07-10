@@ -403,6 +403,7 @@ export default function Home() {
                   key={category} 
                   value={category} 
                   className="border-0"
+                  data-accordion-item
                   ref={(el) => { accordionRefs.current[category] = el; }}
                 >
                   <Card className="overflow-hidden border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
