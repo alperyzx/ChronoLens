@@ -6,11 +6,15 @@ import ClientComponent from './ClientComponent';
 const geistSans = Geist({
   variable: '--font-geist-sans',
   subsets: ['latin'],
+  display: 'swap', // Improve font loading performance
+  preload: true,
 });
 
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
+  display: 'swap', // Improve font loading performance
+  preload: false, // Only preload if actively used
 });
 
 export const metadata: Metadata = {

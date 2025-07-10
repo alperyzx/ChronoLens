@@ -371,7 +371,8 @@ export default function Home() {
                   </svg>
                 </div>
                 <h1 className={cn(
-                  "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-indigo-300 dark:to-blue-300 bg-clip-text text-transparent transition-all duration-300 ease-in-out",
+                  // Increased contrast for dark mode
+                  "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent transition-all duration-300 ease-in-out drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]",
                   isHeaderShrunken ? "text-xl" : "text-3xl"
                 )}>
                   ChronoLens
@@ -389,7 +390,7 @@ export default function Home() {
       
       {/* Main Content */}
       <div className="container mx-auto px-4 pb-8 relative z-10 flex-1">
-        <div className="max-w-6xl mx-auto">
+        <div className="max-w-6xl mx-auto pt-4">
           <div className="w-full">
             <Accordion 
               type="multiple" 

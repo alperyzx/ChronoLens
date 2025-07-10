@@ -78,6 +78,13 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+    /* Disable scroll anchoring globally to prevent layout shift warnings */
+    overflow-anchor: none;
+  }
+  
+  /* Apply scroll anchoring disable to all scrollable containers */
+  html {
+    overflow-anchor: none;
   }
 }
 
