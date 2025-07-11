@@ -121,10 +121,18 @@ export default function Home() {
   const baseHeaderShrunken = useHeaderShrink(100);
   const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
   const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const scrollPositionRef = useRef<number>(0);
 
   // Handle accordion value changes and smooth scroll
   const handleAccordionChange = (value: string[]) => {
     const newlyOpened = value.filter(v => !openAccordions.includes(v));
+    const newlyClosed = openAccordions.filter(v => !value.includes(v));
+    
+    // Store current scroll position before any changes
+    if (newlyOpened.length > 0) {
+      scrollPositionRef.current = window.pageYOffset || document.documentElement.scrollTop;
+    }
+    
     setOpenAccordions(value);
     
     // If a new accordion was opened, scroll it to the top
@@ -147,6 +155,23 @@ export default function Home() {
           });
         }, 150);
       }
+    }
+    
+    // If all accordions are closed, account for header expansion and adjust scroll position
+    if (value.length === 0 && openAccordions.length > 0) {
+      // Calculate the header height difference (expanded - shrunken)
+      const headerHeightDifference = 96 - 64; // py-4 (96px total) - py-2 (64px total)
+      
+      // Adjust the stored scroll position to account for header expansion
+      const adjustedScrollPosition = Math.max(0, scrollPositionRef.current - headerHeightDifference);
+      
+      // Wait for header expansion animation to complete (300ms) before scrolling
+      setTimeout(() => {
+        window.scrollTo({
+          top: adjustedScrollPosition,
+          behavior: 'smooth'
+        });
+      }, 300); // Match the CSS transition duration
     }
   };
   
