@@ -143,7 +143,7 @@ export default function Home() {
             top: Math.max(0, targetPosition), // Ensure we don't scroll to negative position
             behavior: 'smooth'
           });
-        }, 150);
+        }, 700);
       }
     }
   };
@@ -317,26 +317,26 @@ export default function Home() {
       
       {/* Header - Sticky */}
       <div className={cn(
-        "sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out",
+        "sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-700 ease-in-out",
         isHeaderShrunken ? "py-2" : "py-4"
       )}>
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto relative">
             {/* Day/Week Toggle - Top Right, Aligned with Content */}
             <div className={cn(
-              "absolute right-0 z-50 transition-all duration-300 ease-in-out",
+              "absolute right-0 z-50 transition-all duration-700 ease-in-out",
               isHeaderShrunken ? "-top-1" : "-top-2"
             )}>
               <button 
                 onClick={toggleView}
                 className={cn(
-                  "bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-lg shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-200 hover:scale-105",
+                  "bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-lg shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-500 hover:scale-105",
                   isHeaderShrunken ? "p-1.5" : "p-2.5"
                 )}
                 title={isTodayView ? "Switch to Week View" : "Switch to Today View"}
               >
                 <div className={cn(
-                  "transition-all duration-300 ease-in-out",
+                  "transition-all duration-700 ease-in-out",
                   isHeaderShrunken ? "w-4 h-4" : "w-5 h-5"
                 )}>
                   {isTodayView ? (
@@ -356,15 +356,15 @@ export default function Home() {
             </div>
             <div className="flex flex-col items-start">
               <div className={cn(
-                "flex items-center space-x-3 transition-all duration-300 ease-in-out",
+                "flex items-center space-x-3 transition-all duration-700 ease-in-out",
                 isHeaderShrunken ? "mb-0" : "mb-1"
               )}>
                 <div className={cn(
-                  "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 ease-in-out",
+                  "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transition-all duration-700 ease-in-out",
                   isHeaderShrunken ? "w-6 h-6" : "w-8 h-8"
                 )}>
                   <svg className={cn(
-                    "text-white transition-all duration-300 ease-in-out",
+                    "text-white transition-all duration-700 ease-in-out",
                     isHeaderShrunken ? "w-3.5 h-3.5" : "w-5 h-5"
                   )} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -372,14 +372,14 @@ export default function Home() {
                 </div>
                 <h1 className={cn(
                   // Increased contrast for dark mode
-                  "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent transition-all duration-300 ease-in-out drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]",
+                  "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent transition-all duration-700 ease-in-out drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]",
                   isHeaderShrunken ? "text-xl" : "text-3xl"
                 )}>
                   ChronoLens
                 </h1>
               </div>
               <p className={cn(
-                "text-slate-600 dark:text-slate-300 text-base transition-all duration-300 ease-in-out overflow-hidden",
+                "text-slate-600 dark:text-slate-300 text-base transition-all duration-700 ease-in-out overflow-hidden",
                 isHeaderShrunken 
                   ? "opacity-0 max-h-0 transform scale-y-0 origin-top" 
                   : "opacity-100 max-h-8 transform scale-y-100 origin-top"
