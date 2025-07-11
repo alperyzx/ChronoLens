@@ -351,24 +351,24 @@ export default function Home() {
                 <button 
                   onClick={toggleView}
                   className={cn(
-                    "bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-lg shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-300 hover:scale-105",
-                    isHeaderShrunken ? "p-1.5 scale-90" : "p-2.5"
+                    "bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-lg shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-300 hover:scale-105 flex items-center justify-center",
+                    isHeaderShrunken ? "p-1.5 scale-90 w-6 h-6" : "p-2.5 w-8 h-8"
                   )}
                   title={isTodayView ? "Switch to Week View" : "Switch to Today View"}
                 >
                   <div className={cn(
-                    "transition-all duration-300 ease-in-out",
-                    isHeaderShrunken ? "w-4 h-4" : "w-5 h-5"
+                    "transition-all duration-300 ease-in-out flex items-center justify-center",
+                    isHeaderShrunken ? "w-6 h-6" : "w-8 h-8"
                   )}>
                     {isTodayView ? (
                       // Today Icon - Calendar with dot
-                      <svg className="w-full h-full text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 md:w-6 md:h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         <circle cx="12" cy="15" r="2" fill="currentColor" />
                       </svg>
                     ) : (
                       // Week Icon - Grid
-                      <svg className="w-full h-full text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-5 h-5 md:w-6 md:h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
                       </svg>
                     )}
