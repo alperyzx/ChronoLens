@@ -115,6 +115,61 @@
     background-color: rgba(17, 24, 39, 0.75);
     border: 1px solid rgba(75, 85, 99, 0.3);
   }
+
+  /* Accordion-specific fixes */
+  .accordion-content {
+    transform-origin: top;
+    will-change: height, opacity;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    contain: layout style;
+  }
+  
+  /* Prevent layout shift during accordion animations */
+  .accordion-item {
+    contain: layout style;
+    isolation: isolate;
+  }
+  
+  /* Smooth accordion transitions */
+  .accordion-trigger {
+    transition: all 0.3s ease-in-out;
+  }
+  
+  /* Prevent backdrop-filter flashing on accordion cards */
+  .accordion-card {
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform;
+  }
+  
+  /* Header-specific optimizations */
+  .header-container {
+    will-change: padding;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    contain: layout style;
+  }
+  
+  /* Prevent scroll anchor adjustments during animations */
+  .no-scroll-anchor {
+    overflow-anchor: none;
+  }
+  
+  /* Smooth accordion container */
+  .accordion-container {
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+  }
 }
 
 @layer utilities {

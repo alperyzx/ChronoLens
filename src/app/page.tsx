@@ -162,16 +162,48 @@ export default function Home() {
       // Calculate the header height difference (expanded - shrunken)
       const headerHeightDifference = 96 - 64; // py-4 (96px total) - py-2 (64px total)
       
-      // Adjust the stored scroll position to account for header expansion
-      const adjustedScrollPosition = Math.max(0, scrollPositionRef.current - headerHeightDifference);
+      // Get the current scroll position at the moment of closing
+      const currentScrollPosition = window.pageYOffset || document.documentElement.scrollTop;
       
-      // Wait for header expansion animation to complete (300ms) before scrolling
+      // Store original scroll behavior and disable all automatic scroll adjustments
+      const originalScrollBehavior = document.documentElement.style.scrollBehavior;
+      const originalOverflowAnchor = document.documentElement.style.overflowAnchor;
+      const originalBodyOverflowAnchor = document.body.style.overflowAnchor;
+      
+      // Immediately disable all scroll behaviors to prevent any automatic adjustments
+      document.documentElement.style.scrollBehavior = 'auto';
+      document.documentElement.style.overflowAnchor = 'none';
+      document.body.style.overflowAnchor = 'none';
+      
+      // Calculate the target scroll position
+      const targetScrollPosition = Math.max(0, currentScrollPosition - headerHeightDifference);
+      
+      // Apply the scroll adjustment immediately to prevent any visual jumping
+      window.scrollTo(0, targetScrollPosition);
+      
+      // Keep scroll locked during the entire animation duration
+      let scrollLocked = true;
+      const lockScrollPosition = targetScrollPosition;
+      
+      const preventScroll = () => {
+        if (scrollLocked) {
+          window.scrollTo(0, lockScrollPosition);
+        }
+      };
+      
+      // Add scroll event listener to lock scroll position during animation
+      window.addEventListener('scroll', preventScroll, { passive: false });
+      
+      // Release scroll lock after animation completes
       setTimeout(() => {
-        window.scrollTo({
-          top: adjustedScrollPosition,
-          behavior: 'smooth'
-        });
-      }, 300); // Match the CSS transition duration
+        scrollLocked = false;
+        window.removeEventListener('scroll', preventScroll);
+        
+        // Restore original scroll behaviors
+        document.documentElement.style.scrollBehavior = originalScrollBehavior || 'smooth';
+        document.documentElement.style.overflowAnchor = originalOverflowAnchor || 'auto';
+        document.body.style.overflowAnchor = originalBodyOverflowAnchor || 'auto';
+      }, 320); // Match the accordion animation duration (300ms) + small buffer
     }
   };
   
@@ -344,7 +376,7 @@ export default function Home() {
       
       {/* Header - Sticky with Responsive Design */}
       <div className={cn(
-        "sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out will-change-padding",
+        "sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out will-change-padding header-container",
         isHeaderShrunken ? "py-2" : "py-4"
       )}>
         <div className="container mx-auto px-4">
@@ -421,7 +453,7 @@ export default function Home() {
           <div className="w-full">
             <Accordion 
               type="multiple" 
-              className="space-y-4"
+              className="space-y-4 accordion-container"
               value={openAccordions}
               onValueChange={handleAccordionChange}
             >
@@ -429,11 +461,11 @@ export default function Home() {
                 <AccordionItem 
                   key={category} 
                   value={category} 
-                  className="border-0"
+                  className="border-0 accordion-item"
                   data-accordion-item
                   ref={(el) => { accordionRefs.current[category] = el; }}
                 >
-                  <Card className="overflow-hidden border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
+                  <Card className="overflow-hidden border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.01] accordion-card">
                     <AccordionTrigger className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180">
                       <div 
                         className="relative h-16 md:h-20 overflow-hidden w-full"
