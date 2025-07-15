@@ -117,7 +117,9 @@ export default function Home() {
   const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
   const categories: Array<"Sociology" | "Technology" | "Philosophy" | "Science" | "Politics" | "Art"> = ["Sociology", "Technology", "Philosophy", "Science", "Politics", "Art"];
-  const isHeaderShrunken = useHeaderShrink(80);
+  // Use a simpler logic: expand header when all accordions are closed
+  const baseHeaderShrunken = useHeaderShrink(100);
+  const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
   const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Handle accordion value changes and smooth scroll
@@ -134,8 +136,8 @@ export default function Home() {
         setTimeout(() => {
           const rect = element.getBoundingClientRect();
           const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-          // Calculate offset based on header size and add padding
-          const headerHeight = isHeaderShrunken ? 80 : 120; // Adjust based on header shrink state
+          // Dynamic header height based on shrink state
+          const headerHeight = isHeaderShrunken ? 64 : 96; // py-2 = 16px*2, py-4 = 24px*2, plus content
           const padding = 20; // Additional spacing
           const targetPosition = rect.top + scrollTop - headerHeight - padding;
           
@@ -315,81 +317,81 @@ export default function Home() {
         </div>
       </div>
       
-      {/* Header - Sticky */}
+      {/* Header - Sticky with Responsive Design */}
       <div className={cn(
-        "sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out",
+        "sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out will-change-padding",
         isHeaderShrunken ? "py-2" : "py-4"
       )}>
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto relative">
-            {/* Day/Week Toggle - Top Right, Aligned with Content */}
-            <div className={cn(
-              "absolute right-0 z-50 transition-all duration-300 ease-in-out",
-              isHeaderShrunken ? "-top-1" : "-top-2"
-            )}>
-              <button 
-                onClick={toggleView}
-                className={cn(
-                  "bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-lg shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-200 hover:scale-105",
-                  isHeaderShrunken ? "p-1.5" : "p-2.5"
-                )}
-                title={isTodayView ? "Switch to Week View" : "Switch to Today View"}
-              >
-                <div className={cn(
-                  "transition-all duration-300 ease-in-out",
-                  isHeaderShrunken ? "w-4 h-4" : "w-5 h-5"
-                )}>
-                  {isTodayView ? (
-                    // Today Icon - Calendar with dot
-                    <svg className="w-full h-full text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      <circle cx="12" cy="15" r="2" fill="currentColor" />
-                    </svg>
-                  ) : (
-                    // Week Icon - Grid
-                    <svg className="w-full h-full text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                    </svg>
-                  )}
-                </div>
-              </button>
-            </div>
+            {/* Header Content */}
             <div className="flex flex-col items-start">
-              <div className={cn(
-                "flex items-center space-x-3 transition-all duration-300 ease-in-out",
-                isHeaderShrunken ? "mb-0" : "mb-1"
-              )}>
-                <div className={cn(
-                  "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 ease-in-out",
-                  isHeaderShrunken ? "w-6 h-6" : "w-8 h-8"
-                )}>
-                  <svg className={cn(
-                    "text-white transition-all duration-300 ease-in-out",
-                    isHeaderShrunken ? "w-3.5 h-3.5" : "w-5 h-5"
-                  )} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+              <div className="flex items-center space-x-3 w-full justify-between">
+                <div className="flex items-center space-x-3">
+                  <div className={cn(
+                    "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 ease-in-out",
+                    isHeaderShrunken ? "w-6 h-6" : "w-8 h-8"
+                  )}>
+                    <svg className={cn(
+                      "text-white transition-all duration-300 ease-in-out",
+                      isHeaderShrunken ? "w-3.5 h-3.5" : "w-5 h-5"
+                    )} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <h1 className={cn(
+                    "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent transition-all duration-300 ease-in-out drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]",
+                    isHeaderShrunken ? "text-xl" : "text-3xl"
+                  )}>
+                    ChronoLens
+                  </h1>
                 </div>
-                <h1 className={cn(
-                  // Increased contrast for dark mode
-                  "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent transition-all duration-300 ease-in-out drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]",
-                  isHeaderShrunken ? "text-xl" : "text-3xl"
-                )}>
-                  ChronoLens
-                </h1>
+                
+                {/* Day/Week Toggle - Aligned to right edge */}
+                <button 
+                  onClick={toggleView}
+                  className={cn(
+                    "bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-lg shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-300 hover:scale-105 flex items-center justify-center",
+                    isHeaderShrunken ? "p-1.5 scale-90 w-6 h-6" : "p-2.5 w-8 h-8"
+                  )}
+                  title={isTodayView ? "Switch to Week View" : "Switch to Today View"}
+                >
+                  <div className={cn(
+                    "transition-all duration-300 ease-in-out flex items-center justify-center",
+                    isHeaderShrunken ? "w-6 h-6" : "w-8 h-8"
+                  )}>
+                    {isTodayView ? (
+                      // Today Icon - Calendar with dot
+                      <svg className="w-5 h-5 md:w-6 md:h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        <circle cx="12" cy="15" r="2" fill="currentColor" />
+                      </svg>
+                    ) : (
+                      // Week Icon - Grid
+                      <svg className="w-5 h-5 md:w-6 md:h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                      </svg>
+                    )}
+                  </div>
+                </button>
               </div>
-              {!isHeaderShrunken && (
-                <p className="text-slate-600 dark:text-slate-300 text-base opacity-100 transition-all duration-300 ease-in-out">
-                  Discover historical events across {isTodayView ? "today" : "this week"} in different subjects
+              
+              {/* Subtitle with smooth transitions - single line */}
+              <div className={cn(
+                "overflow-hidden transition-all duration-300 ease-in-out",
+                isHeaderShrunken ? "max-h-0 opacity-0 mt-0" : "max-h-6 opacity-100 mt-1"
+              )}>
+                <p className="text-slate-600 dark:text-slate-300 text-base whitespace-nowrap">
+                  Discover historical events across {isTodayView ? "today" : "this week"}
                 </p>
-              )}
+              </div>
             </div>
           </div>
         </div>
       </div>
       
       {/* Main Content */}
-      <div className="container mx-auto px-4 pb-8 relative z-10 flex-1">
+      <div className="container mx-auto px-4 pb-8 relative z-10 flex-1" style={{ scrollPaddingTop: '96px' }}>
         <div className="max-w-6xl mx-auto pt-4">
           <div className="w-full">
             <Accordion 
@@ -409,7 +411,7 @@ export default function Home() {
                   <Card className="overflow-hidden border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
                     <AccordionTrigger className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180">
                       <div 
-                        className="relative h-20 overflow-hidden w-full"
+                        className="relative h-16 md:h-20 overflow-hidden w-full"
                         style={{
                           background: categoryBackgrounds[category as keyof typeof categoryBackgrounds],
                         }}
@@ -418,7 +420,7 @@ export default function Home() {
                         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent"></div>
                         
                         {/* Category header */}
-                        <div className="absolute inset-0 flex items-center justify-between p-4">
+                        <div className="absolute inset-0 flex items-center justify-between p-3 md:p-4">
                           <div className="flex items-center space-x-3">
                             <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center border border-white/30">
                               {categoryIcons[category as keyof typeof categoryIcons]}

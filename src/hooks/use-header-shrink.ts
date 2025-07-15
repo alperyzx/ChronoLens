@@ -10,34 +10,36 @@ export function useHeaderShrink(threshold: number = 100) {
     try {
       const scrollY = window?.scrollY ?? 0;
       
-      // Get the sticky header element to determine its height
-      const stickyHeader = document.querySelector('[class*="sticky top-0"]') as HTMLElement;
-      const headerHeight = stickyHeader?.offsetHeight || 80; // fallback to 80px
+      // Get actual header height from DOM to be precise
+      const headerElement = document.querySelector('div[class*="sticky top-0"]');
+      const headerHeight = headerElement?.getBoundingClientRect().height || 80;
       
       // Check if any content is intersecting with the header area
       // Look for accordion items or other main content elements
-      const contentElements = document.querySelectorAll('[data-accordion-item], .accordion-item, main > div > div, [class*="AccordionItem"], [class*="Card"]');
+      const contentElements = document.querySelectorAll('[data-accordion-item]');
       let hasContentUnderHeader = false;
       
       if (contentElements.length > 0) {
         for (const element of contentElements) {
           const rect = element.getBoundingClientRect();
           // Check if element is intersecting with header area (top of viewport + header height)
-          // Add a small buffer (10px) to trigger shrinking slightly before content actually touches header
-          if (rect.top < headerHeight + 10 && rect.bottom > 0) {
+          // Use a larger buffer (25px) and only check elements that are actually visible
+          if (rect.top < headerHeight + 25 && rect.bottom > headerHeight && rect.height > 0) {
             hasContentUnderHeader = true;
             break;
           }
         }
       }
       
-      // Combine scroll position and content intersection logic
-      const shouldShrink = scrollY > threshold || hasContentUnderHeader;
+      // Primary detection based on scroll position to prevent infinite loops
+      // Only use content intersection as secondary confirmation
+      const scrollBasedShrink = scrollY > threshold;
+      const shouldShrink = scrollBasedShrink || (hasContentUnderHeader && scrollY > 20);
       
-      // Use hysteresis to prevent rapid toggling
+      // Use hysteresis with smaller gap for better responsiveness
       if (!isShrunken && shouldShrink) {
         setIsShrunken(true);
-      } else if (isShrunken && scrollY < threshold - 30 && !hasContentUnderHeader) {
+      } else if (isShrunken && scrollY < threshold - 20 && !hasContentUnderHeader) {
         setIsShrunken(false);
       }
     } catch (error) {
