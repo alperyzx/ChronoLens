@@ -8,6 +8,7 @@ import {
   type CacheKey,
   type CachedHistoricalEvent 
 } from '@/lib/cache';
+import { filterHiddenContent } from '@/lib/report-cache';
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,8 +55,11 @@ export async function GET(request: NextRequest) {
     if (await hasValidCache(key)) {
       const cachedData = await getCacheData(key);
       if (cachedData) {
+        // Filter out reported content before returning
+        const filteredData = await filterHiddenContent(cachedData);
+        
         return NextResponse.json({
-          data: cachedData,
+          data: filteredData,
           cached: true,
           timestamp: new Date().toISOString()
         });
@@ -95,8 +99,11 @@ export async function GET(request: NextRequest) {
       await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
     }
 
+    // Filter out reported content before returning to client
+    const filteredEvents = await filterHiddenContent(cachedEvents);
+
     return NextResponse.json({
-      data: cachedEvents,
+      data: filteredEvents,
       cached: false,
       timestamp: new Date().toISOString()
     });

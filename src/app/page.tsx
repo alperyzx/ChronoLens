@@ -13,6 +13,18 @@ import { Toaster } from "@/components/ui/toaster";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Navigation, Footer } from "@/components/navigation";
 import { useHeaderShrink } from "@/hooks/use-header-shrink";
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // Define types for our events
 type HistoricalEvent = {
@@ -116,11 +128,14 @@ export default function Home() {
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
   const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
+  const [reportingContent, setReportingContent] = useState<Record<string, boolean>>({});
+  const [confirmReportEvent, setConfirmReportEvent] = useState<HistoricalEvent | null>(null);
   const categories: Array<"Sociology" | "Technology" | "Philosophy" | "Science" | "Politics" | "Art"> = ["Sociology", "Technology", "Philosophy", "Science", "Politics", "Art"];
   // Use a simpler logic: expand header when all accordions are closed
   const baseHeaderShrunken = useHeaderShrink(100);
   const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
   const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const { toast } = useToast();
 
   // Handle accordion value changes and smooth scroll
   const handleAccordionChange = (value: string[]) => {
@@ -208,6 +223,65 @@ export default function Home() {
 
   const toggleView = () => {
     setIsTodayView(!isTodayView);
+  };
+
+  // Report content function
+  const showReportConfirmation = (event: HistoricalEvent) => {
+    setConfirmReportEvent(event);
+  };
+
+  const confirmReportContent = async () => {
+    if (!confirmReportEvent) return;
+    
+    const event = confirmReportEvent;
+    const reportKey = `${event.title}-${event.category}-${event.date}`;
+    
+    setReportingContent(prev => ({ ...prev, [reportKey]: true }));
+    setConfirmReportEvent(null); // Close the dialog
+    
+    try {
+      const response = await fetch('/api/report-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: event.title,
+          category: event.category,
+          date: event.date
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: "Content Reported",
+          description: result.message,
+          variant: result.isHidden ? "destructive" : "default",
+        });
+        
+        // If content is now hidden, refresh the category events
+        if (result.isHidden) {
+          await fetchCategoryEvents(event.category);
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to report content. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error reporting content:', error);
+      toast({
+        title: "Error",
+        description: "Failed to report content. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setReportingContent(prev => ({ ...prev, [reportKey]: false }));
+    }
   };
 
   return (
@@ -470,51 +544,76 @@ export default function Home() {
                           </div>
                         ) : historicalEvents[category] && historicalEvents[category].length > 0 ? (
                           <div className="space-y-3">
-                            {historicalEvents[category].map((event: any, index: number) => (
-                              <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-md transition-all duration-200 hover:scale-[1.005]">
-                                <CardContent className="p-4">
-                                  <div className="space-y-3">
-                                    {/* Header with title and calendar icon as source link */}
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex-1 pr-3">
-                                        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
-                                          {event.title}
-                                        </h3>
-                                        <div className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium px-2 py-0.5 rounded-md inline-block">
-                                          {event.date}
+                            {historicalEvents[category].map((event: any, index: number) => {
+                              const reportKey = `${event.title}-${event.category}-${event.date}`;
+                              const isReporting = reportingContent[reportKey] || false;
+                              
+                              return (
+                                <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-md transition-all duration-200 hover:scale-[1.005]">
+                                  <CardContent className="p-4">
+                                    <div className="space-y-3">
+                                      {/* Header with title and action buttons */}
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1 pr-3">
+                                          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
+                                            {event.title}
+                                          </h3>
+                                          <div className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium px-2 py-0.5 rounded-md inline-block">
+                                            {event.date}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center space-x-2 flex-shrink-0">
+                                          {/* Report button */}
+                                          <button
+                                            onClick={() => showReportConfirmation(event)}
+                                            disabled={isReporting}
+                                            className="w-7 h-7 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-all duration-200 group/report disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Report inappropriate content"
+                                          >
+                                            {isReporting ? (
+                                              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                              </svg>
+                                            ) : (
+                                              <svg className="w-3.5 h-3.5 group-hover/report:scale-105 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                              </svg>
+                                            )}
+                                          </button>
+                                          
+                                          {/* Source link button */}
+                                          {event.source ? (
+                                            <a 
+                                              href={event.source} 
+                                              target="_blank" 
+                                              rel="noopener noreferrer" 
+                                              className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/icon"
+                                              title={`View source for ${event.title}`}
+                                            >
+                                              <svg className="w-3.5 h-3.5 text-white group-hover/icon:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                              </svg>
+                                            </a>
+                                          ) : (
+                                            <div className="w-7 h-7 bg-gradient-to-br from-slate-400 to-slate-500 rounded-lg flex items-center justify-center shadow-md opacity-50">
+                                              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                              </svg>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
-                                      <div className="flex-shrink-0">
-                                        {event.source ? (
-                                          <a 
-                                            href={event.source} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer" 
-                                            className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/icon"
-                                            title={`View source for ${event.title}`}
-                                          >
-                                            <svg className="w-3.5 h-3.5 text-white group-hover/icon:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                          </a>
-                                        ) : (
-                                          <div className="w-7 h-7 bg-gradient-to-br from-slate-400 to-slate-500 rounded-lg flex items-center justify-center shadow-md opacity-50">
-                                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                          </div>
-                                        )}
+                                      <div className="w-full">
+                                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm">
+                                          {event.description}
+                                        </p>
                                       </div>
                                     </div>
-                                    <div className="w-full">
-                                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm">
-                                        {event.description}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
                           </div>
                         ) : (
                           <div className="text-center py-8">
@@ -547,6 +646,33 @@ export default function Home() {
       </div>
       <Footer />
       <Toaster />
+      
+      {/* Report Confirmation Dialog */}
+      <AlertDialog open={!!confirmReportEvent} onOpenChange={(open) => !open && setConfirmReportEvent(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Report Content</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to report this content as inappropriate?
+              <br />
+              <br />
+              <strong>"{confirmReportEvent?.title}"</strong>
+              <br />
+              <br />
+              This action will contribute to potentially hiding this content from all users if it receives multiple reports.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmReportContent}
+              className="bg-slate-600 hover:bg-slate-700 text-white"
+            >
+              Report Content
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
