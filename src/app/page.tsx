@@ -225,6 +225,61 @@ export default function Home() {
     setIsTodayView(!isTodayView);
   };
 
+  // Share content function
+  const shareContent = async (event: HistoricalEvent) => {
+    // Create shareable content with domain prominently featured
+    const domain = window.location.origin;
+    const shareText = `🏛️ ${event.title}\n\n${event.description}\n\n📅 Date: ${event.date}\n🔗 Source: ${event.source || domain}\n\n✨ Discover more historical events at ${domain}`;
+    
+    // Try Web Share API first (if available and not in automated testing)
+    if (navigator.share && typeof window !== 'undefined' && !window.navigator.webdriver) {
+      const shareData = {
+        title: `${event.title} - ChronoLens`,
+        text: `${event.description}\n\nDiscover more at ${domain}`,
+        url: event.source || domain
+      };
+
+      try {
+        if (navigator.canShare && navigator.canShare(shareData)) {
+          await navigator.share(shareData);
+          toast({
+            title: "Content Shared",
+            description: "Historical event shared successfully!",
+          });
+          return;
+        }
+      } catch (error) {
+        console.log('Web Share API not available or canceled, falling back to clipboard');
+      }
+    }
+
+    // Fallback to clipboard
+    try {
+      await navigator.clipboard.writeText(shareText);
+      toast({
+        title: "Copied to Clipboard",
+        description: "Event details copied to clipboard for sharing!",
+      });
+    } catch (clipboardError) {
+      // Final fallback: simplified content
+      try {
+        const fallbackText = `${event.title} - ${event.date}\n\nDiscover more historical events at ${domain}`;
+        await navigator.clipboard.writeText(fallbackText);
+        toast({
+          title: "Copied to Clipboard", 
+          description: "Event info copied to clipboard!",
+        });
+      } catch (finalError) {
+        console.error('All share methods failed:', finalError);
+        toast({
+          title: "Share Failed",
+          description: "Unable to copy to clipboard. Please select and copy manually.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
   // Report content function
   const showReportConfirmation = (event: HistoricalEvent) => {
     setConfirmReportEvent(event);
@@ -580,6 +635,17 @@ export default function Home() {
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                               </svg>
                                             )}
+                                          </button>
+                                          
+                                          {/* Share button */}
+                                          <button
+                                            onClick={() => shareContent(event)}
+                                            className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/share"
+                                            title="Share this historical event"
+                                          >
+                                            <svg className="w-3.5 h-3.5 text-white group-hover/share:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                                            </svg>
                                           </button>
                                           
                                           {/* Source link button */}
