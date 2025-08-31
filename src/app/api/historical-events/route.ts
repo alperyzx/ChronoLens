@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Validate category
-    const validCategories = ['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art'];
+    const validCategories = ['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature'];
     if (!validCategories.includes(category)) {
       return NextResponse.json(
         { error: 'Invalid category' },

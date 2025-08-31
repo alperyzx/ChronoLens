@@ -12,7 +12,7 @@ import {z} from 'genkit';
 
 const GenerateHistoricalEventsInputSchema = z.object({
   date: z.string().describe('The date for which to retrieve historical events (YYYY-MM-DD or "This Week").'),
-  category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of historical events to retrieve.'),
+  category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of historical events to retrieve.'),
 });
 export type GenerateHistoricalEventsInput = z.infer<typeof GenerateHistoricalEventsInputSchema>;
 
@@ -20,7 +20,7 @@ const HistoricalEventSchema = z.object({
   title: z.string().describe('The title of the historical event.'),
   date: z.string().describe('The ISO date string of the historical event (YYYY-MM-DD).'),
   description: z.string().describe('A description of the historical event (50-100 words).'),
-  category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of the historical event.'),
+  category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of the historical event.'),
   source: z.string().describe('URL to a reputable source verifying this historical event.'),
 });
 
@@ -43,7 +43,7 @@ const historicalEventsPromptToday = ai.definePrompt({
   input: {
     schema: z.object({
       date: z.string().describe('The date for which to retrieve historical events (YYYY-MM-DD).'),
-      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of historical events to retrieve.'),
+      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of historical events to retrieve.'),
     }),
   },
   output: {
@@ -51,7 +51,7 @@ const historicalEventsPromptToday = ai.definePrompt({
       title: z.string().describe('The title of the historical event.'),
       date: z.string().describe('The ISO date string of the historical event (YYYY-MM-DD).'),
       description: z.string().describe('A description of the historical event (50-100 words).'),
-      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of the historical event.'),
+      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of the historical event.'),
       source: z.string().describe('URL to a reputable source verifying this historical event.'),
     })),
   },
@@ -73,7 +73,7 @@ const historicalEventsPromptWeek = ai.definePrompt({
   input: {
     schema: z.object({
       date: z.string().describe('The date for which to retrieve historical events ("This Week").'),
-      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of historical events to retrieve.'),
+      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of historical events to retrieve.'),
     }),
   },
   output: {
@@ -81,7 +81,7 @@ const historicalEventsPromptWeek = ai.definePrompt({
       title: z.string().describe('The title of the historical event.'),
       date: z.string().describe('The ISO date string of the historical event (YYYY-MM-DD).'),
       description: z.string().describe('A description of the historical event (50-100 words).'),
-      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of the historical event.'),
+      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of the historical event.'),
       source: z.string().describe('URL to a reputable source verifying this historical event.'),
     })),
   },
