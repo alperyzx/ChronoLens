@@ -572,13 +572,8 @@ export default function Home() {
                               <h2 className="text-xl font-bold text-white drop-shadow-lg">
                                 {category}
                               </h2>
-                              <p className="text-white/80 text-xs">
-                                {loadingCategories[category] 
-                                  ? "Loading events..." 
-                                  : historicalEvents[category] 
-                                    ? `${historicalEvents[category].length} events`
-                                    : "No events found"
-                                }
+                              <p className="text-white/80 text-xs text-left">
+                                {loadingCategories[category] ? "Loading events..." : historicalEvents[category] ? `${historicalEvents[category].length} events` : "No events found"}
                               </p>
                             </div>
                           </div>
