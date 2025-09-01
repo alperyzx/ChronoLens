@@ -239,14 +239,28 @@ export default function Home() {
     setIsTodayView(!isTodayView);
   };
 
-  // Share content function
+  // Share content function - Enhanced for mobile devices
   const shareContent = async (event: HistoricalEvent) => {
     // Create shareable content with domain prominently featured
     const domain = window.location.origin;
     const shareText = `🏛️ ${event.title}\n\n${event.description}\n\n📅 Date: ${event.date}\n🔗 Source: ${event.source || domain}\n\n✨ Discover more historical events at ${domain}`;
-    
-    // Try Web Share API first (if available and not in automated testing)
-    if (navigator.share && typeof window !== 'undefined' && !window.navigator.webdriver) {
+
+    // Check if we're in a secure context (required for Web Share API)
+    const isSecureContext = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    // Check if we're on a mobile device
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    console.log('Share attempt:', {
+      hasShareAPI: !!navigator.share,
+      isSecureContext,
+      isMobile,
+      userAgent: navigator.userAgent,
+      webdriver: !!navigator.webdriver
+    });
+
+    // Try Web Share API first (if available and in secure context)
+    if (navigator.share && typeof window !== 'undefined' && isSecureContext) {
       const shareData = {
         title: `${event.title} - ChronoLens`,
         text: `${event.description}\n\nDiscover more at ${domain}`,
@@ -254,47 +268,79 @@ export default function Home() {
       };
 
       try {
+        // Check if the browser can share this data
         if (navigator.canShare && navigator.canShare(shareData)) {
+          console.log('Using Web Share API with data:', shareData);
           await navigator.share(shareData);
           toast({
             title: "Content Shared",
             description: "Historical event shared successfully!",
           });
           return;
+        } else {
+          console.log('Web Share API available but cannot share this data format');
         }
       } catch (error) {
-        console.log('Web Share API not available or canceled, falling back to clipboard');
+        console.log('Web Share API failed:', error);
+        // Check if it was a user cancellation (not an error)
+        if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('cancelled'))) {
+          console.log('User cancelled share dialog');
+          return;
+        }
       }
+    } else {
+      console.log('Web Share API not available:', {
+        hasShare: !!navigator.share,
+        isSecureContext,
+        protocol: window.location.protocol,
+        hostname: window.location.hostname
+      });
     }
 
     // Fallback to clipboard
     try {
+      console.log('Falling back to clipboard copy');
       await navigator.clipboard.writeText(shareText);
       toast({
         title: "Copied to Clipboard",
         description: "Event details copied to clipboard for sharing!",
       });
     } catch (clipboardError) {
-      // Final fallback: simplified content
+      console.log('Clipboard failed:', clipboardError);
+      // Final fallback: try to use the older execCommand method for mobile compatibility
       try {
-        const fallbackText = `${event.title} - ${event.date}\n\nDiscover more historical events at ${domain}`;
-        await navigator.clipboard.writeText(fallbackText);
-        toast({
-          title: "Copied to Clipboard", 
-          description: "Event info copied to clipboard!",
-        });
+        const textArea = document.createElement('textarea');
+        textArea.value = shareText;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+
+        if (successful) {
+          toast({
+            title: "Copied to Clipboard",
+            description: "Event info copied to clipboard!",
+          });
+        } else {
+          throw new Error('execCommand copy failed');
+        }
       } catch (finalError) {
         console.error('All share methods failed:', finalError);
         toast({
-          title: "Share Failed",
-          description: "Unable to copy to clipboard. Please select and copy manually.",
+          title: isMobile ? "Share Unavailable" : "Copy Failed",
+          description: isMobile
+            ? "Please select and copy the text manually to share."
+            : "Unable to copy to clipboard. Please select and copy manually.",
           variant: "destructive",
         });
       }
     }
-  };
-
-  // Report content function
+  };  // Report content function
   const showReportConfirmation = (event: HistoricalEvent) => {
     setConfirmReportEvent(event);
   };
@@ -724,26 +770,22 @@ export default function Home() {
       
       {/* Report Confirmation Dialog */}
       <AlertDialog open={!!confirmReportEvent} onOpenChange={(open) => !open && setConfirmReportEvent(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Report Content</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to report this content as inappropriate?
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader className="space-y-2">
+            <AlertDialogTitle className="text-lg">Report Content</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Report <strong>"{confirmReportEvent?.title}"</strong> as inappropriate?
               <br />
-              <br />
-              <strong>"{confirmReportEvent?.title}"</strong>
-              <br />
-              <br />
-              This action will contribute to potentially hiding this content from all users if it receives multiple reports.
+              Multiple reports may hide this content.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
+          <AlertDialogFooter className="flex gap-2 pt-2">
+            <AlertDialogCancel className="flex-1 h-9">Cancel</AlertDialogCancel>
+            <AlertDialogAction
               onClick={confirmReportContent}
-              className="bg-slate-600 hover:bg-slate-700 text-white"
+              className="flex-1 h-9 bg-red-600 hover:bg-red-700 text-white"
             >
-              Report Content
+              Report
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
