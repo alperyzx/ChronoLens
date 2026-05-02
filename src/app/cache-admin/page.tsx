@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Navigation, Footer } from "@/components/navigation";
+import { CacheAdminAuthGuard } from "./auth-guard";
 
 interface CacheStats {
   keys: number;
@@ -125,7 +126,7 @@ export default function CacheAdmin() {
     fetchReportStats();
   }, []);
 
-  return (
+  const adminContent = (
     <>
       <Navigation />
       <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900 antialiased">
@@ -395,5 +396,11 @@ export default function CacheAdmin() {
       <Footer />
     </div>
     </>
+  );
+
+  return (
+    <CacheAdminAuthGuard>
+      {adminContent}
+    </CacheAdminAuthGuard>
   );
 }
