@@ -9,6 +9,7 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
+import {HISTORICAL_EVENT_CATEGORIES} from '@/lib/historical-event-categories';
 
 // Helper function to calculate the current week's date range
 function getWeekDateRange(): { startDate: string; endDate: string; monthDay: string } {
@@ -103,6 +104,19 @@ const HistoricalEventSchema = z.object({
 const GenerateHistoricalEventsOutputSchema = z.array(HistoricalEventSchema);
 export type GenerateHistoricalEventsOutput = z.infer<typeof GenerateHistoricalEventsOutputSchema>;
 
+const HistoricalEventsByCategorySchema = z.object({
+  Sociology: z.array(HistoricalEventSchema),
+  Technology: z.array(HistoricalEventSchema),
+  Philosophy: z.array(HistoricalEventSchema),
+  Science: z.array(HistoricalEventSchema),
+  Politics: z.array(HistoricalEventSchema),
+  Art: z.array(HistoricalEventSchema),
+  Sports: z.array(HistoricalEventSchema),
+  Literature: z.array(HistoricalEventSchema),
+});
+
+export type HistoricalEventsByCategory = z.infer<typeof HistoricalEventsByCategorySchema>;
+
 // Optimized implementation with better error handling
 export async function generateHistoricalEvents(input: GenerateHistoricalEventsInput): Promise<GenerateHistoricalEventsOutput> {
   try {
@@ -111,6 +125,24 @@ export async function generateHistoricalEvents(input: GenerateHistoricalEventsIn
     console.error('Error generating historical events:', error);
     // Return empty array instead of throwing to allow partial data display
     return [];
+  }
+}
+
+export async function generateHistoricalEventsByCategory(input: GenerateHistoricalEventsInput): Promise<HistoricalEventsByCategory> {
+  try {
+    return await generateHistoricalEventsByCategoryFlow(input);
+  } catch (error) {
+    console.error('Error generating batch historical events:', error);
+    return {
+      Sociology: [],
+      Technology: [],
+      Philosophy: [],
+      Science: [],
+      Politics: [],
+      Art: [],
+      Sports: [],
+      Literature: [],
+    };
   }
 }
 
@@ -254,6 +286,70 @@ SOURCE VALIDATION:
 The output must be a JSON array. Return ONLY events that fall within {{{weekRange}}}. Make every event worth remembering.`,
 });
 
+const batchHistoricalEventsPromptToday = ai.definePrompt({
+  name: 'batchHistoricalEventsPromptToday',
+  input: {
+    schema: z.object({
+      date: z.string().describe('The date for which to retrieve historical events (YYYY-MM-DD).'),
+    }),
+  },
+  output: {
+    schema: HistoricalEventsByCategorySchema,
+  },
+  prompt: `You are a passionate historian and educator. Generate historical events for each category below in one response.
+
+Categories: ${HISTORICAL_EVENT_CATEGORIES.join(', ')}
+
+For the date {{{date}}}, return a JSON object with exactly these keys:
+${HISTORICAL_EVENT_CATEGORIES.map(category => `- ${category}`).join('\n')}
+
+For each category, provide 3 inspiring and meaningful historical events from past years that occurred on the EXACT same month and day (MM-DD) as {{{date}}}.
+
+Requirements for every event:
+- Title, ISO date (YYYY-MM-DD), 50-100 word description, matching category, and a reputable source URL
+- Only include events that match the month and day of {{{date}}}
+- Prefer verified, lasting, meaningful events
+- Do not invent or duplicate events across categories
+- Return an empty array for any category where you cannot verify suitable events
+
+The output must be valid JSON and must include all category keys exactly once.`,
+});
+
+const batchHistoricalEventsPromptWeek = ai.definePrompt({
+  name: 'batchHistoricalEventsPromptWeek',
+  input: {
+    schema: z.object({
+      date: z.string().describe('The date for which to retrieve historical events ("This Week").'),
+      weekRange: z.string().describe('The pre-calculated week range.'),
+      startMM_DD: z.string().describe('Start of week in MM-DD format'),
+      endMM_DD: z.string().describe('End of week in MM-DD format'),
+    }),
+  },
+  output: {
+    schema: HistoricalEventsByCategorySchema,
+  },
+  prompt: `You are a passionate historian and educator. Generate historical events for each category below in one response.
+
+Categories: ${HISTORICAL_EVENT_CATEGORIES.join(', ')}
+
+This week's date range is {{{weekRange}}}.
+Valid dates must have MM-DD between {{{startMM_DD}}} and {{{endMM_DD}}}.
+
+Return a JSON object with exactly these keys:
+${HISTORICAL_EVENT_CATEGORIES.map(category => `- ${category}`).join('\n')}
+
+For each category, provide 3 inspiring and meaningful historical events from past years that occurred during {{{weekRange}}}.
+
+Requirements for every event:
+- Title, ISO date (YYYY-MM-DD), 50-100 word description, matching category, and a reputable source URL
+- Only include events that fall within the current week range
+- Prefer verified, lasting, meaningful events
+- Do not invent or duplicate events across categories
+- Return an empty array for any category where you cannot verify suitable events
+
+The output must be valid JSON and must include all category keys exactly once.`,
+});
+
 const generateHistoricalEventsFlow = ai.defineFlow<
   typeof GenerateHistoricalEventsInputSchema,
   typeof GenerateHistoricalEventsOutputSchema
@@ -288,4 +384,66 @@ const generateHistoricalEventsFlow = ai.defineFlow<
     return output!;
   }
 );
+
+const generateHistoricalEventsByCategoryFlow = ai.defineFlow<
+  typeof GenerateHistoricalEventsInputSchema,
+  typeof HistoricalEventsByCategorySchema
+>(
+  {
+    name: 'generateHistoricalEventsByCategoryFlow',
+    inputSchema: GenerateHistoricalEventsInputSchema,
+    outputSchema: HistoricalEventsByCategorySchema,
+  },
+  async input => {
+    const {date} = input;
+
+    if (date === 'This Week') {
+      const weekInfo = getWeekDateRange();
+      const weekInput = {
+        date,
+        weekRange: weekInfo.monthDay,
+        startMM_DD: weekInfo.startDate,
+        endMM_DD: weekInfo.endDate,
+      };
+
+      const {output: weekOutput} = await batchHistoricalEventsPromptWeek(weekInput);
+      return filterByDateRangeForCategories(weekOutput || emptyCategoryMap(), weekInfo.startDate, weekInfo.endDate);
+    }
+
+    const {output: todayOutput} = await batchHistoricalEventsPromptToday({date});
+    const [, month, day] = date.split('-');
+    const mmdd = `${month}-${day}`;
+    return filterByDateRangeForCategories(todayOutput || emptyCategoryMap(), mmdd, mmdd);
+  }
+);
+
+function emptyCategoryMap(): HistoricalEventsByCategory {
+  return {
+    Sociology: [],
+    Technology: [],
+    Philosophy: [],
+    Science: [],
+    Politics: [],
+    Art: [],
+    Sports: [],
+    Literature: [],
+  };
+}
+
+function filterByDateRangeForCategories(
+  eventsByCategory: HistoricalEventsByCategory,
+  startMM_DD: string,
+  endMM_DD: string
+): HistoricalEventsByCategory {
+  return {
+    Sociology: filterEventsByDateRange(eventsByCategory.Sociology || [], startMM_DD, endMM_DD),
+    Technology: filterEventsByDateRange(eventsByCategory.Technology || [], startMM_DD, endMM_DD),
+    Philosophy: filterEventsByDateRange(eventsByCategory.Philosophy || [], startMM_DD, endMM_DD),
+    Science: filterEventsByDateRange(eventsByCategory.Science || [], startMM_DD, endMM_DD),
+    Politics: filterEventsByDateRange(eventsByCategory.Politics || [], startMM_DD, endMM_DD),
+    Art: filterEventsByDateRange(eventsByCategory.Art || [], startMM_DD, endMM_DD),
+    Sports: filterEventsByDateRange(eventsByCategory.Sports || [], startMM_DD, endMM_DD),
+    Literature: filterEventsByDateRange(eventsByCategory.Literature || [], startMM_DD, endMM_DD),
+  };
+}
 

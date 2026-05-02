@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import type { HistoricalEventCategory } from './historical-event-categories';
 
 export interface CachedHistoricalEvent {
   title: string;
@@ -12,7 +13,7 @@ export interface CachedHistoricalEvent {
 
 export type CacheKey = {
   date: string; // YYYY-MM-DD or "This Week"
-  category: 'Sociology' | 'Technology' | 'Philosophy' | 'Science' | 'Politics' | 'Art';
+  category: HistoricalEventCategory;
   viewType: 'today' | 'week';
 };
 

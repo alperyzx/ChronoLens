@@ -14,6 +14,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Navigation, Footer } from "@/components/navigation";
 import { useHeaderShrink } from "@/hooks/use-header-shrink";
 import { useToast } from "@/hooks/use-toast";
+import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from "@/lib/historical-event-categories";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +40,8 @@ type HistoricalEvent = {
 type CategoryEvents = {
   [category: string]: HistoricalEvent[];
 };
+
+type HistoricalEventsByCategory = Record<HistoricalEventCategory, HistoricalEvent[]>;
 
 // Category Icons - Modern SVG icons
 const categoryIcons = {
@@ -136,6 +139,41 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
   }
 }
 
+async function getHistoricalEventsForAllCategories(isTodayView: boolean): Promise<{eventsByCategory: HistoricalEventsByCategory, cached: boolean}> {
+  const today = new Date();
+  const dateString = today.toISOString().slice(0, 10);
+  const viewType = isTodayView ? 'today' : 'week';
+
+  const response = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}`);
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (result.error) {
+    throw new Error(result.error);
+  }
+
+  const emptyEventsByCategory = HISTORICAL_EVENT_CATEGORIES.reduce((accumulator, category) => {
+    accumulator[category] = [];
+    return accumulator;
+  }, {} as HistoricalEventsByCategory);
+
+  const eventsByCategory = {
+    ...emptyEventsByCategory,
+    ...(result.dataByCategory || {}),
+  } as HistoricalEventsByCategory;
+
+  console.log(`All categories ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
+
+  return {
+    eventsByCategory,
+    cached: result.cached || false,
+  };
+}
+
 export default function Home() {
   const [isTodayView, setIsTodayView] = useState(true);
   const [historicalEvents, setHistoricalEvents] = useState<CategoryEvents>({});
@@ -144,7 +182,7 @@ export default function Home() {
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
   const [reportingContent, setReportingContent] = useState<Record<string, boolean>>({});
   const [confirmReportEvent, setConfirmReportEvent] = useState<HistoricalEvent | null>(null);
-  const categories: Array<"Sociology" | "Technology" | "Philosophy" | "Science" | "Politics" | "Art" | "Sports" | "Literature"> = ["Sociology", "Technology", "Philosophy", "Science", "Politics", "Art", "Sports", "Literature"];
+  const categories = HISTORICAL_EVENT_CATEGORIES;
   // Use a simpler logic: expand header when all accordions are closed
   const baseHeaderShrunken = useHeaderShrink(100);
   const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
@@ -216,7 +254,7 @@ export default function Home() {
     }
   };
 
-  const fetchAllEvents = () => {
+  const fetchAllEvents = async () => {
     // Initialize loading state for all categories
     const initialLoadingState: Record<string, boolean> = {};
     categories.forEach(cat => {
@@ -227,8 +265,30 @@ export default function Home() {
     // Reset cache status
     setCacheStatus({});
     
-    // Fetch each category independently
-    categories.forEach(fetchCategoryEvents);
+    try {
+      const {eventsByCategory, cached} = await getHistoricalEventsForAllCategories(isTodayView);
+
+      setHistoricalEvents(prev => ({
+        ...prev,
+        ...eventsByCategory,
+      }));
+
+      setCacheStatus(
+        categories.reduce((accumulator, category) => {
+          accumulator[category] = cached;
+          return accumulator;
+        }, {} as Record<string, boolean>)
+      );
+    } catch (error) {
+      console.error('Failed to fetch all categories', error);
+    } finally {
+      setLoadingCategories(
+        categories.reduce((accumulator, category) => {
+          accumulator[category] = false;
+          return accumulator;
+        }, {} as Record<string, boolean>)
+      );
+    }
   };
 
   useEffect(() => {
