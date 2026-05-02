@@ -13,6 +13,19 @@ import { Toaster } from "@/components/ui/toaster";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Navigation, Footer } from "@/components/navigation";
 import { useHeaderShrink } from "@/hooks/use-header-shrink";
+import { useToast } from "@/hooks/use-toast";
+import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from "@/lib/historical-event-categories";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 // Define types for our events
 type HistoricalEvent = {
@@ -27,6 +40,8 @@ type HistoricalEvent = {
 type CategoryEvents = {
   [category: string]: HistoricalEvent[];
 };
+
+type HistoricalEventsByCategory = Record<HistoricalEventCategory, HistoricalEvent[]>;
 
 // Category Icons - Modern SVG icons
 const categoryIcons = {
@@ -60,6 +75,18 @@ const categoryIcons = {
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h4a2 2 0 002-2V9a2 2 0 00-2-2H7a2 2 0 00-2 2v6a2 2 0 002 2z" />
     </svg>
   ),
+  Sports: (
+    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h8m-8 4h8m-8-8h8M5 21h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2z" />
+      <circle cx="12" cy="12" r="3" fill="currentColor" />
+    </svg>
+  ),
+  Literature: (
+    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9h6" />
+    </svg>
+  ),
 };
 
 // Add the missing link icon definition
@@ -73,6 +100,8 @@ const categoryBackgrounds = {
   Science: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
   Politics: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
   Art: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
+  Sports: "linear-gradient(135deg, #ff6b6b 0%, #feca57 100%)",
+  Literature: "linear-gradient(135deg, #5f27cd 0%, #341f97 100%)",
 };
 
 async function getHistoricalEventsForCategory(category: string, isTodayView: boolean): Promise<{events: HistoricalEvent[], cached: boolean}> {
@@ -110,17 +139,55 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
   }
 }
 
+async function getHistoricalEventsForAllCategories(isTodayView: boolean): Promise<{eventsByCategory: HistoricalEventsByCategory, cached: boolean}> {
+  const today = new Date();
+  const dateString = today.toISOString().slice(0, 10);
+  const viewType = isTodayView ? 'today' : 'week';
+
+  const response = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}`);
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status}`);
+  }
+
+  const result = await response.json();
+
+  if (result.error) {
+    throw new Error(result.error);
+  }
+
+  const emptyEventsByCategory = HISTORICAL_EVENT_CATEGORIES.reduce((accumulator, category) => {
+    accumulator[category] = [];
+    return accumulator;
+  }, {} as HistoricalEventsByCategory);
+
+  const eventsByCategory = {
+    ...emptyEventsByCategory,
+    ...(result.dataByCategory || {}),
+  } as HistoricalEventsByCategory;
+
+  console.log(`All categories ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
+
+  return {
+    eventsByCategory,
+    cached: result.cached || false,
+  };
+}
+
 export default function Home() {
   const [isTodayView, setIsTodayView] = useState(true);
   const [historicalEvents, setHistoricalEvents] = useState<CategoryEvents>({});
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
   const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
-  const categories: Array<"Sociology" | "Technology" | "Philosophy" | "Science" | "Politics" | "Art"> = ["Sociology", "Technology", "Philosophy", "Science", "Politics", "Art"];
+  const [reportingContent, setReportingContent] = useState<Record<string, boolean>>({});
+  const [confirmReportEvent, setConfirmReportEvent] = useState<HistoricalEvent | null>(null);
+  const categories = HISTORICAL_EVENT_CATEGORIES;
   // Use a simpler logic: expand header when all accordions are closed
   const baseHeaderShrunken = useHeaderShrink(100);
   const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
   const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const { toast } = useToast();
 
   // Handle accordion value changes and smooth scroll
   const handleAccordionChange = (value: string[]) => {
@@ -187,7 +254,7 @@ export default function Home() {
     }
   };
 
-  const fetchAllEvents = () => {
+  const fetchAllEvents = async () => {
     // Initialize loading state for all categories
     const initialLoadingState: Record<string, boolean> = {};
     categories.forEach(cat => {
@@ -198,8 +265,30 @@ export default function Home() {
     // Reset cache status
     setCacheStatus({});
     
-    // Fetch each category independently
-    categories.forEach(fetchCategoryEvents);
+    try {
+      const {eventsByCategory, cached} = await getHistoricalEventsForAllCategories(isTodayView);
+
+      setHistoricalEvents(prev => ({
+        ...prev,
+        ...eventsByCategory,
+      }));
+
+      setCacheStatus(
+        categories.reduce((accumulator, category) => {
+          accumulator[category] = cached;
+          return accumulator;
+        }, {} as Record<string, boolean>)
+      );
+    } catch (error) {
+      console.error('Failed to fetch all categories', error);
+    } finally {
+      setLoadingCategories(
+        categories.reduce((accumulator, category) => {
+          accumulator[category] = false;
+          return accumulator;
+        }, {} as Record<string, boolean>)
+      );
+    }
   };
 
   useEffect(() => {
@@ -208,6 +297,166 @@ export default function Home() {
 
   const toggleView = () => {
     setIsTodayView(!isTodayView);
+  };
+
+  // Share content function - Enhanced for mobile devices
+  const shareContent = async (event: HistoricalEvent) => {
+    // Create shareable content with domain prominently featured
+    const domain = window.location.origin;
+    const shareText = `🏛️ ${event.title}\n\n${event.description}\n\n📅 Date: ${event.date}\n🔗 Source: ${event.source || domain}\n\n✨ Discover more historical events at ${domain}`;
+
+    // Check if we're in a secure context (required for Web Share API)
+    const isSecureContext = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    // Check if we're on a mobile device
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+    console.log('Share attempt:', {
+      hasShareAPI: !!navigator.share,
+      isSecureContext,
+      isMobile,
+      userAgent: navigator.userAgent,
+      webdriver: !!navigator.webdriver
+    });
+
+    // Try Web Share API first (if available and in secure context)
+    if (navigator.share && typeof window !== 'undefined' && isSecureContext) {
+      const shareData = {
+        title: `${event.title} - ChronoLens`,
+        text: `${event.description}\n\nDiscover more at ${domain}`,
+        url: event.source || domain
+      };
+
+      try {
+        // Check if the browser can share this data
+        if (navigator.canShare && navigator.canShare(shareData)) {
+          console.log('Using Web Share API with data:', shareData);
+          await navigator.share(shareData);
+          toast({
+            title: "Content Shared",
+            description: "Historical event shared successfully!",
+          });
+          return;
+        } else {
+          console.log('Web Share API available but cannot share this data format');
+        }
+      } catch (error) {
+        console.log('Web Share API failed:', error);
+        // Check if it was a user cancellation (not an error)
+        if (error instanceof Error && (error.name === 'AbortError' || error.message?.includes('cancelled'))) {
+          console.log('User cancelled share dialog');
+          return;
+        }
+      }
+    } else {
+      console.log('Web Share API not available:', {
+        hasShare: !!navigator.share,
+        isSecureContext,
+        protocol: window.location.protocol,
+        hostname: window.location.hostname
+      });
+    }
+
+    // Fallback to clipboard
+    try {
+      console.log('Falling back to clipboard copy');
+      await navigator.clipboard.writeText(shareText);
+      toast({
+        title: "Copied to Clipboard",
+        description: "Event details copied to clipboard for sharing!",
+      });
+    } catch (clipboardError) {
+      console.log('Clipboard failed:', clipboardError);
+      // Final fallback: try to use the older execCommand method for mobile compatibility
+      try {
+        const textArea = document.createElement('textarea');
+        textArea.value = shareText;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+
+        if (successful) {
+          toast({
+            title: "Copied to Clipboard",
+            description: "Event info copied to clipboard!",
+          });
+        } else {
+          throw new Error('execCommand copy failed');
+        }
+      } catch (finalError) {
+        console.error('All share methods failed:', finalError);
+        toast({
+          title: isMobile ? "Share Unavailable" : "Copy Failed",
+          description: isMobile
+            ? "Please select and copy the text manually to share."
+            : "Unable to copy to clipboard. Please select and copy manually.",
+          variant: "destructive",
+        });
+      }
+    }
+  };  // Report content function
+  const showReportConfirmation = (event: HistoricalEvent) => {
+    setConfirmReportEvent(event);
+  };
+
+  const confirmReportContent = async () => {
+    if (!confirmReportEvent) return;
+    
+    const event = confirmReportEvent;
+    const reportKey = `${event.title}-${event.category}-${event.date}`;
+    
+    setReportingContent(prev => ({ ...prev, [reportKey]: true }));
+    setConfirmReportEvent(null); // Close the dialog
+    
+    try {
+      const response = await fetch('/api/report-content', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: event.title,
+          category: event.category,
+          date: event.date
+        })
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: "Content Reported",
+          description: result.message,
+          variant: result.isHidden ? "destructive" : "default",
+        });
+        
+        // If content is now hidden, refresh the category events
+        if (result.isHidden) {
+          await fetchCategoryEvents(event.category);
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to report content. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error reporting content:', error);
+      toast({
+        title: "Error",
+        description: "Failed to report content. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setReportingContent(prev => ({ ...prev, [reportKey]: false }));
+    }
   };
 
   return (
@@ -429,13 +678,8 @@ export default function Home() {
                               <h2 className="text-xl font-bold text-white drop-shadow-lg">
                                 {category}
                               </h2>
-                              <p className="text-white/80 text-xs">
-                                {loadingCategories[category] 
-                                  ? "Loading events..." 
-                                  : historicalEvents[category] 
-                                    ? `${historicalEvents[category].length} events`
-                                    : "No events found"
-                                }
+                              <p className="text-white/80 text-xs text-left">
+                                {loadingCategories[category] ? "Loading events..." : historicalEvents[category] ? `${historicalEvents[category].length} events` : "No events found"}
                               </p>
                             </div>
                           </div>
@@ -470,51 +714,87 @@ export default function Home() {
                           </div>
                         ) : historicalEvents[category] && historicalEvents[category].length > 0 ? (
                           <div className="space-y-3">
-                            {historicalEvents[category].map((event: any, index: number) => (
-                              <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-md transition-all duration-200 hover:scale-[1.005]">
-                                <CardContent className="p-4">
-                                  <div className="space-y-3">
-                                    {/* Header with title and calendar icon as source link */}
-                                    <div className="flex items-start justify-between">
-                                      <div className="flex-1 pr-3">
-                                        <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
-                                          {event.title}
-                                        </h3>
-                                        <div className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium px-2 py-0.5 rounded-md inline-block">
-                                          {event.date}
+                            {historicalEvents[category].map((event: any, index: number) => {
+                              const reportKey = `${event.title}-${event.category}-${event.date}`;
+                              const isReporting = reportingContent[reportKey] || false;
+                              
+                              return (
+                                <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-md transition-all duration-200 hover:scale-[1.005]">
+                                  <CardContent className="p-4">
+                                    <div className="space-y-3">
+                                      {/* Header with title and action buttons */}
+                                      <div className="flex items-start justify-between">
+                                        <div className="flex-1 pr-3">
+                                          <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors mb-1">
+                                            {event.title}
+                                          </h3>
+                                          <div className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-xs font-medium px-2 py-0.5 rounded-md inline-block">
+                                            {event.date}
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center space-x-2 flex-shrink-0">
+                                          {/* Report button */}
+                                          <button
+                                            onClick={() => showReportConfirmation(event)}
+                                            disabled={isReporting}
+                                            className="w-7 h-7 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-all duration-200 group/report disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Report inappropriate content"
+                                          >
+                                            {isReporting ? (
+                                              <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                              </svg>
+                                            ) : (
+                                              <svg className="w-3.5 h-3.5 group-hover/report:scale-105 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                              </svg>
+                                            )}
+                                          </button>
+                                          
+                                          {/* Share button */}
+                                          <button
+                                            onClick={() => shareContent(event)}
+                                            className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/share"
+                                            title="Share this historical event"
+                                          >
+                                            <svg className="w-3.5 h-3.5 text-white group-hover/share:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+                                            </svg>
+                                          </button>
+                                          
+                                          {/* Source link button */}
+                                          {event.source ? (
+                                            <a 
+                                              href={event.source} 
+                                              target="_blank" 
+                                              rel="noopener noreferrer" 
+                                              className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/icon"
+                                              title={`View source for ${event.title}`}
+                                            >
+                                              <svg className="w-3.5 h-3.5 text-white group-hover/icon:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                              </svg>
+                                            </a>
+                                          ) : (
+                                            <div className="w-7 h-7 bg-gradient-to-br from-slate-400 to-slate-500 rounded-lg flex items-center justify-center shadow-md opacity-50">
+                                              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                              </svg>
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
-                                      <div className="flex-shrink-0">
-                                        {event.source ? (
-                                          <a 
-                                            href={event.source} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer" 
-                                            className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/icon"
-                                            title={`View source for ${event.title}`}
-                                          >
-                                            <svg className="w-3.5 h-3.5 text-white group-hover/icon:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                          </a>
-                                        ) : (
-                                          <div className="w-7 h-7 bg-gradient-to-br from-slate-400 to-slate-500 rounded-lg flex items-center justify-center shadow-md opacity-50">
-                                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                          </div>
-                                        )}
+                                      <div className="w-full">
+                                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm">
+                                          {event.description}
+                                        </p>
                                       </div>
                                     </div>
-                                    <div className="w-full">
-                                      <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm">
-                                        {event.description}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </CardContent>
-                              </Card>
-                            ))}
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
                           </div>
                         ) : (
                           <div className="text-center py-8">
@@ -547,6 +827,29 @@ export default function Home() {
       </div>
       <Footer />
       <Toaster />
+      
+      {/* Report Confirmation Dialog */}
+      <AlertDialog open={!!confirmReportEvent} onOpenChange={(open) => !open && setConfirmReportEvent(null)}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader className="space-y-2">
+            <AlertDialogTitle className="text-lg">Report Content</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
+              Report <strong>"{confirmReportEvent?.title}"</strong> as inappropriate?
+              <br />
+              Multiple reports may hide this content.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex gap-2 pt-2">
+            <AlertDialogCancel className="flex-1 h-9">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmReportContent}
+              className="flex-1 h-9 bg-red-600 hover:bg-red-700 text-white"
+            >
+              Report
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

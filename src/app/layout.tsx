@@ -1,4 +1,4 @@
-import type {Metadata} from 'next';
+import type {Metadata, Viewport} from 'next';
 import {Geist, Geist_Mono} from 'next/font/google';
 import './globals.css';
 import ClientComponent from './ClientComponent';
@@ -17,12 +17,16 @@ const geistMono = Geist_Mono({
   preload: false, // Only preload if actively used
 });
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+};
+
 export const metadata: Metadata = {
   title: 'ChronoLens - Historical Events Discovery',
   description: 'Discover significant historical events across different subjects. Explore daily and weekly historical moments in Sociology, Technology, Philosophy, Science, Politics, and Art.',
   keywords: ['history', 'historical events', 'education', 'timeline', 'today in history'],
   authors: [{ name: 'ChronoLens Team' }],
-  viewport: 'width=device-width, initial-scale=1',
   robots: 'index, follow',
   openGraph: {
     title: 'ChronoLens - Historical Events Discovery',
@@ -65,5 +69,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Navigation, Footer } from "@/components/navigation";
+import { CacheAdminAuthGuard } from "./auth-guard";
 
 interface CacheStats {
   keys: number;
@@ -30,10 +31,22 @@ interface CacheStats {
   timestamp: string;
 }
 
+interface ReportStats {
+  totalReported: number;
+  hiddenContent: number;
+  currentWeek: number;
+  currentYear: number;
+  lastClearWeek: number;
+  lastClearYear: number;
+}
+
 export default function CacheAdmin() {
   const [stats, setStats] = useState<CacheStats | null>(null);
+  const [reportStats, setReportStats] = useState<ReportStats | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingReports, setLoadingReports] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [clearingReports, setClearingReports] = useState(false);
   const [cleaning, setCleaning] = useState(false);
 
   const fetchStats = async () => {
@@ -48,6 +61,21 @@ export default function CacheAdmin() {
       console.error('Failed to fetch cache stats:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchReportStats = async () => {
+    setLoadingReports(true);
+    try {
+      const response = await fetch('/api/report-stats');
+      if (response.ok) {
+        const data = await response.json();
+        setReportStats(data.stats);
+      }
+    } catch (error) {
+      console.error('Failed to fetch report stats:', error);
+    } finally {
+      setLoadingReports(false);
     }
   };
 
@@ -79,11 +107,26 @@ export default function CacheAdmin() {
     }
   };
 
+  const clearAllReports = async () => {
+    setClearingReports(true);
+    try {
+      const response = await fetch('/api/report-stats', { method: 'DELETE' });
+      if (response.ok) {
+        await fetchReportStats(); // Refresh stats after clearing
+      }
+    } catch (error) {
+      console.error('Failed to clear reports:', error);
+    } finally {
+      setClearingReports(false);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
+    fetchReportStats();
   }, []);
 
-  return (
+  const adminContent = (
     <>
       <Navigation />
       <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900 antialiased">
@@ -111,7 +154,7 @@ export default function CacheAdmin() {
           </div>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-2">
+        <div className="grid gap-8 lg:grid-cols-3">
           <Card className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-0 shadow-xl">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
@@ -196,6 +239,57 @@ export default function CacheAdmin() {
           <Card className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-0 shadow-xl">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
+                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Report Statistics</span>
+              </CardTitle>
+              <CardDescription>
+                Content moderation and reporting metrics
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingReports ? (
+                <div className="space-y-2">
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                  <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+                </div>
+              ) : reportStats ? (
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Total Reported:</span>
+                    <Badge variant="secondary">{reportStats.totalReported}</Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Hidden Content:</span>
+                    <Badge variant={reportStats.hiddenContent > 0 ? "destructive" : "default"}>
+                      {reportStats.hiddenContent}
+                    </Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Current Week:</span>
+                    <Badge variant="outline">{reportStats.currentYear}-W{reportStats.currentWeek}</Badge>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Last Cache Clear:</span>
+                    <Badge variant="outline">{reportStats.lastClearYear}-W{reportStats.lastClearWeek}</Badge>
+                  </div>
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="text-xs text-muted-foreground">
+                      Report cache automatically clears each week
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-muted-foreground">Failed to load report statistics</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-0 shadow-xl">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2">
                 <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
                 </svg>
@@ -213,7 +307,17 @@ export default function CacheAdmin() {
                 className="w-full"
                 variant="outline"
               >
-                {loading ? "Refreshing..." : "Refresh Statistics"}
+                {loading ? "Refreshing..." : "Refresh Cache Stats"}
+              </Button>
+            </div>
+            <div>
+              <Button 
+                onClick={fetchReportStats} 
+                disabled={loadingReports}
+                className="w-full mb-2"
+                variant="outline"
+              >
+                {loadingReports ? "Refreshing..." : "Refresh Report Stats"}
               </Button>
             </div>
             <div>
@@ -233,13 +337,26 @@ export default function CacheAdmin() {
               <Button 
                 onClick={clearCache} 
                 disabled={clearing}
-                className="w-full"
+                className="w-full mb-2"
                 variant="destructive"
               >
                 {clearing ? "Clearing..." : "Clear All Cache"}
               </Button>
-              <p className="text-xs text-muted-foreground mt-2">
+              <p className="text-xs text-muted-foreground mb-4">
                 Warning: This will force fresh API calls for all subsequent requests.
+              </p>
+            </div>
+            <div>
+              <Button 
+                onClick={clearAllReports} 
+                disabled={clearingReports}
+                className="w-full"
+                variant="destructive"
+              >
+                {clearingReports ? "Clearing..." : "Clear All Reports"}
+              </Button>
+              <p className="text-xs text-muted-foreground mt-2">
+                Warning: This will unhide all reported content until re-reported.
               </p>
             </div>
           </CardContent>
@@ -248,7 +365,7 @@ export default function CacheAdmin() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Cache Information</CardTitle>
+          <CardTitle>Cache & Reporting Information</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
@@ -262,6 +379,16 @@ export default function CacheAdmin() {
             <p><strong>Benefits:</strong> Minimizes Gemini API requests, survives server restarts, shared cache across all users</p>
             <p><strong>Storage:</strong> File-based cache in system temp directory (persistent)</p>
             <p><strong>Solution:</strong> Fixes Google Cloud server restart cache reset issues</p>
+            
+            <div className="mt-4 pt-4 border-t">
+              <p><strong>Report System:</strong> Content moderation through user reporting</p>
+              <ul className="ml-4 space-y-1">
+                <li>• <strong>Threshold:</strong> Content hidden after 5 reports</li>
+                <li>• <strong>Auto-clear:</strong> Report cache clears every Sunday (new week)</li>
+                <li>• <strong>Filtering:</strong> Reported content filtered from both day and week views</li>
+                <li>• <strong>Persistence:</strong> Report data persists across server restarts</li>
+              </ul>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -269,5 +396,11 @@ export default function CacheAdmin() {
       <Footer />
     </div>
     </>
+  );
+
+  return (
+    <CacheAdminAuthGuard>
+      {adminContent}
+    </CacheAdminAuthGuard>
   );
 }

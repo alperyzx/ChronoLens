@@ -1,6 +1,6 @@
 # ChronoLens
 
-ChronoLens is a web application for discovering significant historical events across a wide range of subjects, including Sociology, Technology, Philosophy, Science, Politics, and Art. Explore daily and weekly historical moments, timelines, and curated educational content.
+ChronoLens is a web application for discovering significant historical events across a wide range of subjects, including Sociology, Technology, Philosophy, Science, Politics, Art, Sports, and Literature. Explore daily and weekly historical moments, timelines, and curated educational content.
 
 ## Features
 - Browse and search historical events by date and subject

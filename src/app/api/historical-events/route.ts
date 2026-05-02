@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateHistoricalEvents } from '@/ai/flows/generate-historical-events';
+import { generateHistoricalEvents, generateHistoricalEventsByCategory } from '@/ai/flows/generate-historical-events';
 import { 
   getCacheData, 
   setCacheData, 
@@ -8,6 +8,8 @@ import {
   type CacheKey,
   type CachedHistoricalEvent 
 } from '@/lib/cache';
+import { filterHiddenContent } from '@/lib/report-cache';
+import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from '@/lib/historical-event-categories';
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,17 +18,18 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
     const viewType = searchParams.get('viewType');
 
+    const isBatchRequest = !category || category === 'all';
+
     // Validate required parameters
-    if (!date || !category || !viewType) {
+    if (!date || !viewType || (!isBatchRequest && !category)) {
       return NextResponse.json(
-        { error: 'Missing required parameters: date, category, viewType' },
+        { error: 'Missing required parameters: date, viewType, and category for single-category requests' },
         { status: 400 }
       );
     }
 
     // Validate category
-    const validCategories = ['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art'];
-    if (!validCategories.includes(category)) {
+    if (!isBatchRequest && !HISTORICAL_EVENT_CATEGORIES.includes(category as HistoricalEventCategory)) {
       return NextResponse.json(
         { error: 'Invalid category' },
         { status: 400 }
@@ -41,10 +44,98 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    if (isBatchRequest) {
+      const cacheResults = await Promise.all(
+        HISTORICAL_EVENT_CATEGORIES.map(async currentCategory => {
+          const cacheKey: CacheKey = {
+            date,
+            category: currentCategory,
+            viewType: viewType as 'today' | 'week'
+          };
+
+          const key = generateCacheKey(cacheKey);
+          const cachedData = await getCacheData(key);
+
+          return {
+            category: currentCategory,
+            cachedData,
+          };
+        })
+      );
+
+      const allCategoriesCached = cacheResults.every(result => Array.isArray(result.cachedData));
+
+      if (allCategoriesCached) {
+        const dataByCategory = await Promise.all(
+          cacheResults.map(async result => [
+            result.category,
+            await filterHiddenContent(result.cachedData || []),
+          ] as const)
+        );
+
+        return NextResponse.json({
+          dataByCategory: Object.fromEntries(dataByCategory),
+          cached: true,
+          timestamp: new Date().toISOString()
+        });
+      }
+
+      console.log('Fetching fresh data from Gemini API for all categories');
+
+      if (!process.env.GOOGLE_GENAI_API_KEY && !process.env.GOOGLE_API_KEY) {
+        console.error('Google Gemini API key not configured');
+        return NextResponse.json({
+          error: 'API key not configured. Please set GOOGLE_GENAI_API_KEY in your environment variables.',
+          dataByCategory: Object.fromEntries(HISTORICAL_EVENT_CATEGORIES.map(currentCategory => [currentCategory, []])),
+          cached: false,
+          timestamp: new Date().toISOString()
+        }, { status: 500 });
+      }
+
+      const eventsByCategory = await generateHistoricalEventsByCategory({
+        date: viewType === 'week' ? 'This Week' : date,
+        category: 'Sociology'
+      });
+
+      const dataByCategoryEntries = await Promise.all(
+        HISTORICAL_EVENT_CATEGORIES.map(async currentCategory => {
+          const events = eventsByCategory[currentCategory] || [];
+          const cachedEvents: CachedHistoricalEvent[] = events.map(event => ({
+            title: event.title,
+            date: event.date,
+            description: event.description,
+            category: event.category,
+            source: event.source
+          }));
+
+          const cacheKey: CacheKey = {
+            date,
+            category: currentCategory,
+            viewType: viewType as 'today' | 'week'
+          };
+
+          const key = generateCacheKey(cacheKey);
+
+          if (cachedEvents.length > 0) {
+            await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
+          }
+
+          const filteredEvents = await filterHiddenContent(cachedEvents);
+          return [currentCategory, filteredEvents] as const;
+        })
+      );
+
+      return NextResponse.json({
+        dataByCategory: Object.fromEntries(dataByCategoryEntries),
+        cached: false,
+        timestamp: new Date().toISOString()
+      });
+    }
+
     // Create cache key
     const cacheKey: CacheKey = {
       date,
-      category: category as any,
+      category: category as HistoricalEventCategory,
       viewType: viewType as 'today' | 'week'
     };
     
@@ -54,8 +145,11 @@ export async function GET(request: NextRequest) {
     if (await hasValidCache(key)) {
       const cachedData = await getCacheData(key);
       if (cachedData) {
+        // Filter out reported content before returning
+        const filteredData = await filterHiddenContent(cachedData);
+        
         return NextResponse.json({
-          data: cachedData,
+          data: filteredData,
           cached: true,
           timestamp: new Date().toISOString()
         });
@@ -78,7 +172,7 @@ export async function GET(request: NextRequest) {
     
     const events = await generateHistoricalEvents({
       date: viewType === 'week' ? 'This Week' : date,
-      category: category as any
+      category: category as HistoricalEventCategory
     });
 
     // Convert to cached format
@@ -95,8 +189,11 @@ export async function GET(request: NextRequest) {
       await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
     }
 
+    // Filter out reported content before returning to client
+    const filteredEvents = await filterHiddenContent(cachedEvents);
+
     return NextResponse.json({
-      data: cachedEvents,
+      data: filteredEvents,
       cached: false,
       timestamp: new Date().toISOString()
     });

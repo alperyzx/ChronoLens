@@ -9,10 +9,87 @@
 
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
+import {HISTORICAL_EVENT_CATEGORIES} from '@/lib/historical-event-categories';
+
+// Helper function to calculate the current week's date range
+function getWeekDateRange(): { startDate: string; endDate: string; monthDay: string } {
+  const today = new Date();
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  
+  // Calculate start of week (Sunday)
+  const startOfWeek = new Date(today);
+  startOfWeek.setDate(today.getDate() - dayOfWeek);
+  
+  // Calculate end of week (Saturday)
+  const endOfWeek = new Date(startOfWeek);
+  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  
+  const startMonth = startOfWeek.toLocaleDateString('en-US', { month: 'long' });
+  const endMonth = endOfWeek.toLocaleDateString('en-US', { month: 'long' });
+  const startDay = startOfWeek.getDate();
+  const endDay = endOfWeek.getDate();
+  
+  // Format: "November 24-30" or "November 30-December 6"
+  const monthDay = startMonth === endMonth 
+    ? `${startMonth} ${startDay}-${endDay}`
+    : `${startMonth} ${startDay}-${endMonth} ${endDay}`;
+  
+  // Get MM-DD format for validation
+  const startMM = String(startOfWeek.getMonth() + 1).padStart(2, '0');
+  const startDD = String(startDay).padStart(2, '0');
+  const endMM = String(endOfWeek.getMonth() + 1).padStart(2, '0');
+  const endDD = String(endDay).padStart(2, '0');
+  
+  return {
+    startDate: `${startMM}-${startDD}`,
+    endDate: `${endMM}-${endDD}`,
+    monthDay
+  };
+}
+
+// Helper function to validate that event dates fall within the expected range
+function filterEventsByDateRange(
+  events: GenerateHistoricalEventsOutput,
+  startMM_DD: string,
+  endMM_DD: string
+): GenerateHistoricalEventsOutput {
+  const [startMonth, startDay] = startMM_DD.split('-').map(Number);
+  const [endMonth, endDay] = endMM_DD.split('-').map(Number);
+  
+  return events.filter(event => {
+    if (!event.date || !/^\d{4}-\d{2}-\d{2}$/.test(event.date)) {
+      console.warn(`Filtered out event with invalid date format: ${event.title}`);
+      return false;
+    }
+    
+    const [, eventMonthStr, eventDayStr] = event.date.split('-');
+    const eventMonth = parseInt(eventMonthStr, 10);
+    const eventDay = parseInt(eventDayStr, 10);
+    
+    // Check if the event falls within the week range
+    let isValid = false;
+    
+    if (startMonth === endMonth) {
+      // Week is within the same month
+      isValid = eventMonth === startMonth && eventDay >= startDay && eventDay <= endDay;
+    } else {
+      // Week spans two months (e.g., Nov 30 - Dec 6)
+      const inFirstMonth = eventMonth === startMonth && eventDay >= startDay;
+      const inSecondMonth = eventMonth === endMonth && eventDay <= endDay;
+      isValid = inFirstMonth || inSecondMonth;
+    }
+    
+    if (!isValid) {
+      console.warn(`Filtered out event with date outside week range: ${event.title} (${event.date})`);
+    }
+    
+    return isValid;
+  });
+}
 
 const GenerateHistoricalEventsInputSchema = z.object({
   date: z.string().describe('The date for which to retrieve historical events (YYYY-MM-DD or "This Week").'),
-  category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of historical events to retrieve.'),
+  category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of historical events to retrieve.'),
 });
 export type GenerateHistoricalEventsInput = z.infer<typeof GenerateHistoricalEventsInputSchema>;
 
@@ -20,12 +97,25 @@ const HistoricalEventSchema = z.object({
   title: z.string().describe('The title of the historical event.'),
   date: z.string().describe('The ISO date string of the historical event (YYYY-MM-DD).'),
   description: z.string().describe('A description of the historical event (50-100 words).'),
-  category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of the historical event.'),
+  category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of the historical event.'),
   source: z.string().describe('URL to a reputable source verifying this historical event.'),
 });
 
 const GenerateHistoricalEventsOutputSchema = z.array(HistoricalEventSchema);
 export type GenerateHistoricalEventsOutput = z.infer<typeof GenerateHistoricalEventsOutputSchema>;
+
+const HistoricalEventsByCategorySchema = z.object({
+  Sociology: z.array(HistoricalEventSchema),
+  Technology: z.array(HistoricalEventSchema),
+  Philosophy: z.array(HistoricalEventSchema),
+  Science: z.array(HistoricalEventSchema),
+  Politics: z.array(HistoricalEventSchema),
+  Art: z.array(HistoricalEventSchema),
+  Sports: z.array(HistoricalEventSchema),
+  Literature: z.array(HistoricalEventSchema),
+});
+
+export type HistoricalEventsByCategory = z.infer<typeof HistoricalEventsByCategorySchema>;
 
 // Optimized implementation with better error handling
 export async function generateHistoricalEvents(input: GenerateHistoricalEventsInput): Promise<GenerateHistoricalEventsOutput> {
@@ -38,12 +128,30 @@ export async function generateHistoricalEvents(input: GenerateHistoricalEventsIn
   }
 }
 
+export async function generateHistoricalEventsByCategory(input: GenerateHistoricalEventsInput): Promise<HistoricalEventsByCategory> {
+  try {
+    return await generateHistoricalEventsByCategoryFlow(input);
+  } catch (error) {
+    console.error('Error generating batch historical events:', error);
+    return {
+      Sociology: [],
+      Technology: [],
+      Philosophy: [],
+      Science: [],
+      Politics: [],
+      Art: [],
+      Sports: [],
+      Literature: [],
+    };
+  }
+}
+
 const historicalEventsPromptToday = ai.definePrompt({
   name: 'historicalEventsPromptToday',
   input: {
     schema: z.object({
       date: z.string().describe('The date for which to retrieve historical events (YYYY-MM-DD).'),
-      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of historical events to retrieve.'),
+      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of historical events to retrieve.'),
     }),
   },
   output: {
@@ -51,21 +159,52 @@ const historicalEventsPromptToday = ai.definePrompt({
       title: z.string().describe('The title of the historical event.'),
       date: z.string().describe('The ISO date string of the historical event (YYYY-MM-DD).'),
       description: z.string().describe('A description of the historical event (50-100 words).'),
-      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of the historical event.'),
+      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of the historical event.'),
       source: z.string().describe('URL to a reputable source verifying this historical event.'),
     })),
   },
-  prompt: `As a historian specializing in {{{category}}}, provide significant historical events from past years related to {{{category}}} that occurred on the EXACT same month and day as {{{date}}}.
+  prompt: `You are a passionate historian and educator specializing in {{{category}}}. Your mission is to inspire and enlighten readers by sharing remarkable historical events that demonstrate human achievement, innovation, resilience, and progress.
 
-For the date {{{date}}}, ONLY include events that happened on the same calendar day and month (MM-DD) in previous years. For example, if the date is 2023-04-15, only provide events that happened on April 15th in previous years, like 1912-04-15 or 1865-04-15.
+For the date {{{date}}}, curate INSPIRING and MEANINGFUL historical events from past years that occurred on the EXACT same month and day (MM-DD). These events should:
 
-Today's date is ${new Date().toISOString().split('T')[0]}. 
+✨ INSPIRE: Showcase breakthroughs, triumphs, courage, creativity, or pivotal moments that changed the world
+✨ EDUCATE: Offer valuable lessons, insights, or perspectives that remain relevant today
+✨ RESONATE: Connect emotionally with readers through stories of human achievement, discovery, or transformation
+✨ MATTER: Focus on events with lasting impact or significance that people should remember
+
+SELECTION CRITERIA:
+- Prioritize events that demonstrate human potential, progress, or resilience
+- Include diverse perspectives and underrepresented voices when relevant
+- Choose events that teach us something valuable about ourselves or our world
+- Avoid trivial, purely negative, or overly obscure events unless they have profound lessons
+
+DATE ACCURACY:
+Today's date is ${new Date().toISOString().split('T')[0]}. ONLY include events that happened on the same calendar day and month (MM-DD) in previous years. For example, if the date is 2023-04-15, only provide events that happened on April 15th in previous years, like 1912-04-15 or 1865-04-15.
 
 IMPORTANT: STRICTLY verify that ALL returned event dates match the month and day of {{{date}}}. No event should be from a different month or day.
 
-Ensure each event has a title, a valid ISO date (with matching month and day but from previous years), a description (50–100 words), a matching category, and a source URL to a reputable website (like Wikipedia, Encyclopedia Britannica, History.com, or academic institutions) that verifies the event.
+DESCRIPTION GUIDELINES:
+Write descriptions (50-100 words) that:
+- Start with the IMPACT or SIGNIFICANCE first
+- Explain WHY this event matters and what we can learn from it
+- Use engaging, accessible language that brings the story to life
+- End with a thought-provoking insight or lasting legacy
 
-The output must be a JSON array.`,
+Each event must include:
+1. A compelling, clear title
+2. A valid ISO date (YYYY-MM-DD) with matching month and day but from previous years
+3. An inspiring description (50-100 words)
+4. The matching category: {{{category}}}
+5. A source URL to a reputable website (Wikipedia, Encyclopedia Britannica, History.com, academic institutions, or established historical organizations)
+
+SOURCE VALIDATION:
+- ONLY provide source URLs that you are confident are LIVE and ACCESSIBLE
+- Use well-established, permanent URLs (e.g., Wikipedia articles, major encyclopedias)
+- Prefer general reference pages over specific deep links that may have moved
+- DO NOT guess or fabricate URLs - if unsure about a source, choose a different event that you can verify
+- Each source must directly verify the event described
+
+The output must be a JSON array. Make every event worth remembering.`,
 });
 
 const historicalEventsPromptWeek = ai.definePrompt({
@@ -73,7 +212,10 @@ const historicalEventsPromptWeek = ai.definePrompt({
   input: {
     schema: z.object({
       date: z.string().describe('The date for which to retrieve historical events ("This Week").'),
-      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of historical events to retrieve.'),
+      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of historical events to retrieve.'),
+      weekRange: z.string().describe('The pre-calculated week range (e.g., "November 24-30")'),
+      startMM_DD: z.string().describe('Start of week in MM-DD format'),
+      endMM_DD: z.string().describe('End of week in MM-DD format'),
     }),
   },
   output: {
@@ -81,24 +223,131 @@ const historicalEventsPromptWeek = ai.definePrompt({
       title: z.string().describe('The title of the historical event.'),
       date: z.string().describe('The ISO date string of the historical event (YYYY-MM-DD).'),
       description: z.string().describe('A description of the historical event (50-100 words).'),
-      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art']).describe('The category of the historical event.'),
+      category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of the historical event.'),
       source: z.string().describe('URL to a reputable source verifying this historical event.'),
     })),
   },
-  prompt: `As a historian specializing in {{{category}}}, provide significant historical events from past years related to {{{category}}} that occurred during this specific week of the year (same month and day range as the current week).
+  prompt: `You are a passionate historian and educator specializing in {{{category}}}. Your mission is to inspire and enlighten readers by sharing remarkable historical events that demonstrate human achievement, innovation, resilience, and progress.
 
-Today's date is ${new Date().toISOString().split('T')[0]}. Please provide events that happened during this same calendar week (same days and month) but in previous years.
+═══════════════════════════════════════════════════════════════════════════════
+🗓️ THIS WEEK'S DATE RANGE: {{{weekRange}}}
+📅 VALID DATES: Events must have MM-DD between {{{startMM_DD}}} and {{{endMM_DD}}}
+═══════════════════════════════════════════════════════════════════════════════
 
-For example, if today is March 20, provide events that happened between March 17-23 in previous years.
+You MUST ONLY return events that occurred during {{{weekRange}}} in past years.
 
-Ensure each event has:
-1. A title
-2. A valid ISO date (YYYY-MM-DD) that falls within this week's date range but from previous years
-3. A description (50–100 words)
+EXAMPLES OF VALID vs INVALID DATES (if week is November 24-30):
+✅ VALID: 1859-11-24 (November 24) - Darwin publishes Origin of Species
+✅ VALID: 1942-11-28 (November 28) - Cocoanut Grove fire
+✅ VALID: 1947-11-29 (November 29) - UN votes on Palestine partition
+❌ INVALID: 1861-02-15 (February 15) - WRONG MONTH
+❌ INVALID: 1905-02-02 (February 2) - WRONG MONTH
+❌ INVALID: 1991-06-27 (June 27) - WRONG MONTH
+
+🚨 CRITICAL REQUIREMENTS:
+1. Every event date MUST have MM-DD between {{{startMM_DD}}} and {{{endMM_DD}}}
+2. DO NOT include ANY event from February, June, August, or any month outside the current week
+3. If you cannot find verified events for this specific week, return an EMPTY array []
+4. It is better to return 0 events than to include events with wrong dates
+
+For this week in history, curate INSPIRING and MEANINGFUL events. These events should:
+
+✨ INSPIRE: Showcase breakthroughs, triumphs, courage, creativity, or pivotal moments that changed the world
+✨ EDUCATE: Offer valuable lessons, insights, or perspectives that remain relevant today
+✨ RESONATE: Connect emotionally with readers through stories of human achievement, discovery, or transformation
+✨ MATTER: Focus on events with lasting impact or significance that people should remember
+
+SELECTION CRITERIA:
+- Prioritize events that demonstrate human potential, progress, or resilience
+- Include diverse perspectives and underrepresented voices when relevant
+- Choose events that teach us something valuable about ourselves or our world
+- Avoid trivial, purely negative, or overly obscure events unless they have profound lessons
+
+DESCRIPTION GUIDELINES:
+Write descriptions (50-100 words) that:
+- Start with the IMPACT or SIGNIFICANCE first
+- Explain WHY this event matters and what we can learn from it
+- Use engaging, accessible language that brings the story to life
+- End with a thought-provoking insight or lasting legacy
+
+Each event must include:
+1. A compelling, clear title
+2. A valid ISO date (YYYY-MM-DD) where MM-DD is between {{{startMM_DD}}} and {{{endMM_DD}}}
+3. An inspiring description (50-100 words)
 4. The matching category: {{{category}}}
-5. A source URL to a reputable website (like Wikipedia, Encyclopedia Britannica, History.com, or academic institutions) that verifies the event. The source URL is REQUIRED and MUST be included for every single event.
+5. A source URL to a reputable website (Wikipedia, Encyclopedia Britannica, History.com, or academic institutions)
 
-The output must be a JSON array, with each event occurring during this same week in past years and MUST include a valid source URL for each event.`,
+SOURCE VALIDATION:
+- ONLY provide source URLs that you are confident are LIVE and ACCESSIBLE
+- Use well-established, permanent URLs (e.g., Wikipedia articles, major encyclopedias)
+- DO NOT guess or fabricate URLs - if unsure about a source, choose a different event
+- Each source must directly verify the event described
+
+The output must be a JSON array. Return ONLY events that fall within {{{weekRange}}}. Make every event worth remembering.`,
+});
+
+const batchHistoricalEventsPromptToday = ai.definePrompt({
+  name: 'batchHistoricalEventsPromptToday',
+  input: {
+    schema: z.object({
+      date: z.string().describe('The date for which to retrieve historical events (YYYY-MM-DD).'),
+    }),
+  },
+  output: {
+    schema: HistoricalEventsByCategorySchema,
+  },
+  prompt: `You are a passionate historian and educator. Generate historical events for each category below in one response.
+
+Categories: ${HISTORICAL_EVENT_CATEGORIES.join(', ')}
+
+For the date {{{date}}}, return a JSON object with exactly these keys:
+${HISTORICAL_EVENT_CATEGORIES.map(category => `- ${category}`).join('\n')}
+
+For each category, provide 3 inspiring and meaningful historical events from past years that occurred on the EXACT same month and day (MM-DD) as {{{date}}}.
+
+Requirements for every event:
+- Title, ISO date (YYYY-MM-DD), 50-100 word description, matching category, and a reputable source URL
+- Only include events that match the month and day of {{{date}}}
+- Prefer verified, lasting, meaningful events
+- Do not invent or duplicate events across categories
+- Return an empty array for any category where you cannot verify suitable events
+
+The output must be valid JSON and must include all category keys exactly once.`,
+});
+
+const batchHistoricalEventsPromptWeek = ai.definePrompt({
+  name: 'batchHistoricalEventsPromptWeek',
+  input: {
+    schema: z.object({
+      date: z.string().describe('The date for which to retrieve historical events ("This Week").'),
+      weekRange: z.string().describe('The pre-calculated week range.'),
+      startMM_DD: z.string().describe('Start of week in MM-DD format'),
+      endMM_DD: z.string().describe('End of week in MM-DD format'),
+    }),
+  },
+  output: {
+    schema: HistoricalEventsByCategorySchema,
+  },
+  prompt: `You are a passionate historian and educator. Generate historical events for each category below in one response.
+
+Categories: ${HISTORICAL_EVENT_CATEGORIES.join(', ')}
+
+This week's date range is {{{weekRange}}}.
+Valid dates must have MM-DD between {{{startMM_DD}}} and {{{endMM_DD}}}.
+
+Return a JSON object with exactly these keys:
+${HISTORICAL_EVENT_CATEGORIES.map(category => `- ${category}`).join('\n')}
+
+For each category, provide 3 inspiring and meaningful historical events from past years that occurred during {{{weekRange}}}.
+
+Requirements for every event:
+- Title, ISO date (YYYY-MM-DD), 50-100 word description, matching category, and a reputable source URL
+- Only include events that fall within the current week range
+- Prefer verified, lasting, meaningful events
+- Do not invent or duplicate events across categories
+- Return an empty array for any category where you cannot verify suitable events
+
+The output must be valid JSON and must include all category keys exactly once.`,
 });
 
 const generateHistoricalEventsFlow = ai.defineFlow<
@@ -114,13 +363,87 @@ const generateHistoricalEventsFlow = ai.defineFlow<
     const {date} = input;
     let output;
     if (date === 'This Week') {
-      const {output: weekOutput} = await historicalEventsPromptWeek(input);
-      output = weekOutput;
+      // Pre-calculate the week range
+      const weekInfo = getWeekDateRange();
+      const weekInput = {
+        ...input,
+        weekRange: weekInfo.monthDay,
+        startMM_DD: weekInfo.startDate,
+        endMM_DD: weekInfo.endDate,
+      };
+      const {output: weekOutput} = await historicalEventsPromptWeek(weekInput);
+      // Filter out any events that don't match the week range
+      output = filterEventsByDateRange(weekOutput || [], weekInfo.startDate, weekInfo.endDate);
     } else {
       const {output: todayOutput} = await historicalEventsPromptToday(input);
-      output = todayOutput;
+      // Filter out any events that don't match the specific date
+      const [, month, day] = date.split('-');
+      const mmdd = `${month}-${day}`;
+      output = filterEventsByDateRange(todayOutput || [], mmdd, mmdd);
     }
     return output!;
   }
 );
+
+const generateHistoricalEventsByCategoryFlow = ai.defineFlow<
+  typeof GenerateHistoricalEventsInputSchema,
+  typeof HistoricalEventsByCategorySchema
+>(
+  {
+    name: 'generateHistoricalEventsByCategoryFlow',
+    inputSchema: GenerateHistoricalEventsInputSchema,
+    outputSchema: HistoricalEventsByCategorySchema,
+  },
+  async input => {
+    const {date} = input;
+
+    if (date === 'This Week') {
+      const weekInfo = getWeekDateRange();
+      const weekInput = {
+        date,
+        weekRange: weekInfo.monthDay,
+        startMM_DD: weekInfo.startDate,
+        endMM_DD: weekInfo.endDate,
+      };
+
+      const {output: weekOutput} = await batchHistoricalEventsPromptWeek(weekInput);
+      return filterByDateRangeForCategories(weekOutput || emptyCategoryMap(), weekInfo.startDate, weekInfo.endDate);
+    }
+
+    const {output: todayOutput} = await batchHistoricalEventsPromptToday({date});
+    const [, month, day] = date.split('-');
+    const mmdd = `${month}-${day}`;
+    return filterByDateRangeForCategories(todayOutput || emptyCategoryMap(), mmdd, mmdd);
+  }
+);
+
+function emptyCategoryMap(): HistoricalEventsByCategory {
+  return {
+    Sociology: [],
+    Technology: [],
+    Philosophy: [],
+    Science: [],
+    Politics: [],
+    Art: [],
+    Sports: [],
+    Literature: [],
+  };
+}
+
+function filterByDateRangeForCategories(
+  eventsByCategory: HistoricalEventsByCategory,
+  startMM_DD: string,
+  endMM_DD: string
+): HistoricalEventsByCategory {
+  return {
+    Sociology: filterEventsByDateRange(eventsByCategory.Sociology || [], startMM_DD, endMM_DD),
+    Technology: filterEventsByDateRange(eventsByCategory.Technology || [], startMM_DD, endMM_DD),
+    Philosophy: filterEventsByDateRange(eventsByCategory.Philosophy || [], startMM_DD, endMM_DD),
+    Science: filterEventsByDateRange(eventsByCategory.Science || [], startMM_DD, endMM_DD),
+    Politics: filterEventsByDateRange(eventsByCategory.Politics || [], startMM_DD, endMM_DD),
+    Art: filterEventsByDateRange(eventsByCategory.Art || [], startMM_DD, endMM_DD),
+    Sports: filterEventsByDateRange(eventsByCategory.Sports || [], startMM_DD, endMM_DD),
+    Literature: filterEventsByDateRange(eventsByCategory.Literature || [], startMM_DD, endMM_DD),
+  };
+}
 
