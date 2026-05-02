@@ -31,6 +31,36 @@ export function Navigation() {
   );
 }
 
+export function NavigationShell({
+  children,
+}: {
+  children?: React.ReactNode;
+}) {
+  const pathname = usePathname();
+
+  if (pathname === "/") {
+    return null;
+  }
+
+  return (
+    <nav className="fixed top-4 right-4 z-50">
+      <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-2xl p-2 shadow-lg">
+        <div className="flex items-center space-x-2">
+          <Link href="/">
+            <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-900/20">
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Home
+            </Button>
+          </Link>
+          {children}
+        </div>
+      </div>
+    </nav>
+  );
+}
+
 export function Footer() {
   return (
     <footer className="mt-auto border-t border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
