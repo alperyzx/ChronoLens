@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Navigation, Footer } from '@/components/navigation';
+import { Navigation, NavigationShell, Footer } from '@/components/navigation';
 
 interface AuthGuardProps {
   children: React.ReactNode;
@@ -150,7 +150,7 @@ export function CacheAdminAuthGuard({ children }: AuthGuardProps) {
 
   return (
     <div className="relative">
-      <div className="absolute top-4 right-4 z-50">
+      <NavigationShell>
         <Button
           onClick={handleLogout}
           variant="outline"
@@ -159,7 +159,7 @@ export function CacheAdminAuthGuard({ children }: AuthGuardProps) {
         >
           Logout
         </Button>
-      </div>
+      </NavigationShell>
       {children}
     </div>
   );
