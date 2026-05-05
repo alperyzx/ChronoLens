@@ -12,6 +12,12 @@ const nextConfig = {
       },
     });
 
+    // Ignore noisy protobufjs critical dependency warning coming from opentelemetry/protobufjs
+    config.ignoreWarnings = config.ignoreWarnings || [];
+    config.ignoreWarnings.push({
+      message: /Critical dependency: the request of a dependency is an expression/
+    });
+
     return config;
   },
 };

@@ -142,9 +142,9 @@ async function recordStats(delta: { hits?: number; misses?: number }): Promise<v
       const msg = innerError && (innerError as Error).message ? (innerError as Error).message : '';
       if (msg.includes('Path collision')) {
         console.warn('Mongo cache stats schema collision detected — replacing stats doc with numeric counters.');
-        await database.collection(STATS_COLLECTION).replaceOne(
+        await database.collection<CacheStatsDocument>(STATS_COLLECTION).replaceOne(
           { _id: STATS_DOC_ID },
-          { _id: STATS_DOC_ID, hits: delta.hits ?? 0, misses: delta.misses ?? 0, lastUpdated: new Date() },
+          { hits: delta.hits ?? 0, misses: delta.misses ?? 0, lastUpdated: new Date() },
           { upsert: true }
         );
       } else {
