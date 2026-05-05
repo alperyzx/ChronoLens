@@ -340,13 +340,14 @@ const generateHistoricalEventsFlow = ai.defineFlow<
   async input => {
     const {date} = input;
     if (date === 'This Week') {
-      // Pre-calculate the week range
+      // Get today's date for context (Gemini will use week range to filter)
+      const today = new Date().toISOString().slice(0, 10);
       const weekInfo = getWeekDateRange();
       const weekOutput = await generateHistoricalEventsWithCache({
         cacheId: 'historical-events-single-week',
         displayName: 'chronolens historical events single week',
         instructions: SINGLE_EVENT_WEEK_CACHE_INSTRUCTIONS,
-        prompt: buildSingleEventWeekPrompt(input, weekInfo),
+        prompt: buildSingleEventWeekPrompt({ ...input, date: today }, weekInfo),
         outputSchema: GenerateHistoricalEventsOutputSchema,
         ttlSeconds: getTTLUntilEndOfWeek(),
       });
@@ -383,12 +384,14 @@ const generateHistoricalEventsByCategoryFlow = ai.defineFlow<
     const {date} = input;
 
     if (date === 'This Week') {
+      // Get today's date for context (Gemini will use week range to filter)
+      const today = new Date().toISOString().slice(0, 10);
       const weekInfo = getWeekDateRange();
       const weekOutput = await generateHistoricalEventsWithCache({
         cacheId: 'historical-events-batch-week',
         displayName: 'chronolens historical events batch week',
         instructions: BATCH_EVENT_WEEK_CACHE_INSTRUCTIONS,
-        prompt: buildBatchEventWeekPrompt(date, weekInfo),
+        prompt: buildBatchEventWeekPrompt(today, weekInfo),
         outputSchema: HistoricalEventsByCategorySchema,
         ttlSeconds: getTTLUntilEndOfWeek(),
       });
