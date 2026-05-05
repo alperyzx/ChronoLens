@@ -9,6 +9,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:gemini-cache": "npx --yes tsx scripts/verify-gemini-cache.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -50,7 +50,8 @@ export async function GET(request: NextRequest) {
           const cacheKey: CacheKey = {
             date,
             category: currentCategory,
-            viewType: viewType as 'today' | 'week'
+            viewType: viewType as 'today' | 'week',
+            version: 'v2',
           };
 
           const key = generateCacheKey(cacheKey);
@@ -111,7 +112,8 @@ export async function GET(request: NextRequest) {
           const cacheKey: CacheKey = {
             date,
             category: currentCategory,
-            viewType: viewType as 'today' | 'week'
+            viewType: viewType as 'today' | 'week',
+            version: 'v2',
           };
 
           const key = generateCacheKey(cacheKey);
@@ -136,7 +138,8 @@ export async function GET(request: NextRequest) {
     const cacheKey: CacheKey = {
       date,
       category: category as HistoricalEventCategory,
-      viewType: viewType as 'today' | 'week'
+      viewType: viewType as 'today' | 'week',
+      version: 'v2',
     };
     
     const key = generateCacheKey(cacheKey);

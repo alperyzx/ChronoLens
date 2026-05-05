@@ -15,6 +15,7 @@ export type CacheKey = {
   date: string; // YYYY-MM-DD or "This Week"
   category: HistoricalEventCategory;
   viewType: 'today' | 'week';
+  version?: string;
 };
 
 interface CacheEntry {
@@ -104,7 +105,8 @@ async function getStats(): Promise<CacheStats> {
 
 // Generate a unique cache key for each request
 export function generateCacheKey(key: CacheKey): string {
-  return `chronolens_events_${key.viewType}_${key.category}_${key.date}`;
+  const versionSuffix = key.version ? `_${key.version}` : '';
+  return `chronolens_events_${key.viewType}_${key.category}_${key.date}${versionSuffix}`;
 }
 
 // Get TTL until next midnight (in seconds)
