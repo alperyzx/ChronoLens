@@ -29,8 +29,15 @@ type ResolveGeminiContextCacheOptions = {
   ttlSeconds?: number;
 };
 
+type CachedGeminiContext = GeminiCacheRegistryEntry & {
+  cachedAt: number;
+};
+
 const DEFAULT_CACHE_TTL_SECONDS = 24 * 60 * 60;
 export const GEMINI_CACHE_MODEL = 'models/gemini-3-flash-preview';
+const INSTANCE_CACHE_TTL_BUFFER_MS = 30 * 1000;
+
+const instanceCache = new Map<string, CachedGeminiContext>();
 
 function getCacheDir(): string {
   return process.env.CACHE_DIR || path.join(os.tmpdir(), 'chronolens-cache');
@@ -96,6 +103,26 @@ function isCacheExpired(cache: GeminiCacheMetadata): boolean {
   }
 
   return Date.now() >= expireTime;
+}
+
+function isInstanceCacheValid(entry: CachedGeminiContext, options: ResolveGeminiContextCacheOptions): boolean {
+  if (entry.model !== options.model || entry.displayName !== options.displayName) {
+    return false;
+  }
+
+  const expireTime = parseExpireTime(entry.expireTime);
+  if (!expireTime) {
+    return false;
+  }
+
+  return Date.now() < expireTime - INSTANCE_CACHE_TTL_BUFFER_MS;
+}
+
+function rememberCache(cacheId: string, entry: GeminiCacheRegistryEntry): void {
+  instanceCache.set(cacheId, {
+    ...entry,
+    cachedAt: Date.now(),
+  });
 }
 
 async function requestGeminiCache(pathname: string, init?: RequestInit): Promise<Response | undefined> {
@@ -173,15 +200,17 @@ export async function resolveGeminiContextCache(options: ResolveGeminiContextCac
     return undefined;
   }
 
+  const inMemoryCache = instanceCache.get(options.cacheId);
+  if (inMemoryCache && isInstanceCacheValid(inMemoryCache, options)) {
+    return inMemoryCache.name;
+  }
+
   const registry = await readRegistry();
   const registryEntry = registry.entries[options.cacheId];
 
-  if (registryEntry?.name) {
-    const cache = await getCacheByName(registryEntry.name);
-
-    if (cache && cache.model === options.model && cache.displayName === options.displayName && !isCacheExpired(cache)) {
-      return cache.name;
-    }
+  if (registryEntry?.name && registryEntry.model === options.model && registryEntry.displayName === options.displayName && !isCacheExpired(registryEntry)) {
+    rememberCache(options.cacheId, registryEntry);
+    return registryEntry.name;
   }
 
   const caches = await listCaches();
@@ -192,7 +221,7 @@ export async function resolveGeminiContextCache(options: ResolveGeminiContextCac
   );
 
   if (matchingCache?.name) {
-    registry.entries[options.cacheId] = {
+    const registryEntry = {
       name: matchingCache.name,
       model: options.model,
       displayName: options.displayName,
@@ -200,7 +229,10 @@ export async function resolveGeminiContextCache(options: ResolveGeminiContextCac
       updatedAt: new Date().toISOString(),
     };
 
+    registry.entries[options.cacheId] = registryEntry;
+
     await writeRegistry(registry);
+    rememberCache(options.cacheId, registryEntry);
     return matchingCache.name;
   }
 
@@ -210,7 +242,7 @@ export async function resolveGeminiContextCache(options: ResolveGeminiContextCac
     return undefined;
   }
 
-  registry.entries[options.cacheId] = {
+  const createdEntry = {
     name: createdCache.name,
     model: options.model,
     displayName: options.displayName,
@@ -218,6 +250,9 @@ export async function resolveGeminiContextCache(options: ResolveGeminiContextCac
     updatedAt: new Date().toISOString(),
   };
 
+  registry.entries[options.cacheId] = createdEntry;
+
   await writeRegistry(registry);
+  rememberCache(options.cacheId, createdEntry);
   return createdCache.name;
 }

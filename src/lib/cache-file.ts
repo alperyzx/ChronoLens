@@ -30,6 +30,9 @@ interface CacheStats {
   lastUpdated: number;
 }
 
+const TODAY_TTL_SECONDS = 24 * 60 * 60;
+const WEEK_TTL_SECONDS = 7 * 24 * 60 * 60;
+
 // Get cache directory path
 function getCacheDir(): string {
   // Use temp directory or a persistent directory in production
@@ -115,7 +118,7 @@ export function getTTLUntilMidnight(): number {
   const tomorrow = new Date(now);
   tomorrow.setDate(now.getDate() + 1);
   tomorrow.setHours(0, 0, 0, 0);
-  
+
   const ttlMs = tomorrow.getTime() - now.getTime();
   return Math.floor(ttlMs / 1000); // Convert to seconds
 }
@@ -124,14 +127,14 @@ export function getTTLUntilMidnight(): number {
 export function getTTLUntilEndOfWeek(): number {
   const now = new Date();
   const endOfWeek = new Date(now);
-  
+
   // Calculate days until Sunday (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
   const currentDay = now.getDay();
   const daysUntilSunday = currentDay === 0 ? 7 : 7 - currentDay; // If today is Sunday, cache for next Sunday
-  
+
   endOfWeek.setDate(now.getDate() + daysUntilSunday);
   endOfWeek.setHours(0, 0, 0, 0); // Set to midnight of the end day
-  
+
   const ttlMs = endOfWeek.getTime() - now.getTime();
   return Math.floor(ttlMs / 1000); // Convert to seconds
 }
