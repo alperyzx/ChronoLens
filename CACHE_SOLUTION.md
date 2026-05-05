@@ -64,13 +64,11 @@
 
 ### Cache Strategy
 ```javascript
-// Environment-controlled cache selection
-USE_FILE_CACHE=true  // Default: file-based persistence
-CACHE_DIR=/custom/path  // Optional: custom storage location
-
-// Redis option available for scale (optional)
-USE_REDIS_CACHE=false
-REDIS_URL=redis://localhost:6379
+// Cache order
+// 1. Instance memory
+// 2. Firestore-compatible Mongo endpoint
+// 3. Legacy file cache fallback
+MONGO_CREDENTIALS=mongodb://.../dbchronolens?retryWrites=false
 ```
 
 ### File Structure

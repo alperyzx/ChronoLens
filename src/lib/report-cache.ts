@@ -1,6 +1,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import * as mongoReportCache from './report-cache-mongo';
 
 export interface ReportedContent {
   title: string;
@@ -16,6 +17,12 @@ interface ReportCacheEntry {
   reportedContent: Record<string, ReportedContent>; // key: content hash
   lastClearWeek: number; // Last week when cache was cleared
   lastClearYear: number; // Last year when cache was cleared
+}
+
+export interface ReportCacheSnapshot extends ReportCacheEntry {}
+
+function shouldUseMongoReports(): boolean {
+  return Boolean(process.env.MONGO_CREDENTIALS);
 }
 
 // Threshold for hiding content
@@ -96,6 +103,10 @@ async function loadReportCache(): Promise<ReportCacheEntry> {
   }
 }
 
+export async function getReportCacheSnapshot(): Promise<ReportCacheSnapshot> {
+  return loadReportCache();
+}
+
 // Save report cache
 async function saveReportCache(cache: ReportCacheEntry): Promise<void> {
   try {
@@ -133,6 +144,34 @@ async function checkAndClearWeeklyCache(): Promise<void> {
 
 // Report content
 export async function reportContent(title: string, category: string, date: string): Promise<{ success: boolean; reportCount: number; isHidden: boolean }> {
+  try {
+    if (shouldUseMongoReports()) {
+      try {
+        const result = await mongoReportCache.reportContent(title, category, date);
+
+        try {
+          const fileResult = await reportContentToFileOnly(title, category, date);
+          return fileResult.success ? fileResult : result;
+        } catch {
+          return result;
+        }
+      } catch (error) {
+        console.warn('Firestore report cache write failed, falling back to file cache:', error);
+      }
+    }
+
+    return await reportContentToFileOnly(title, category, date);
+  } catch (error) {
+    console.error('Error reporting content:', error);
+    return {
+      success: false,
+      reportCount: 0,
+      isHidden: false
+    };
+  }
+}
+
+async function reportContentToFileOnly(title: string, category: string, date: string): Promise<{ success: boolean; reportCount: number; isHidden: boolean }> {
   try {
     // Check and clear cache if needed
     await checkAndClearWeeklyCache();
@@ -172,7 +211,7 @@ export async function reportContent(title: string, category: string, date: strin
       isHidden
     };
   } catch (error) {
-    console.error('Error reporting content:', error);
+    console.error('Error reporting content to file cache:', error);
     return {
       success: false,
       reportCount: 0,
@@ -184,6 +223,14 @@ export async function reportContent(title: string, category: string, date: strin
 // Check if content should be hidden
 export async function isContentHidden(title: string, category: string, date: string): Promise<boolean> {
   try {
+    if (shouldUseMongoReports()) {
+      try {
+        return await mongoReportCache.isContentHidden(title, category, date);
+      } catch (error) {
+        console.warn('Firestore report cache read failed, falling back to file cache:', error);
+      }
+    }
+
     // Check and clear cache if needed
     await checkAndClearWeeklyCache();
     
@@ -205,6 +252,14 @@ export async function isContentHidden(title: string, category: string, date: str
 // Filter out hidden content from an array
 export async function filterHiddenContent<T extends { title: string; category: string; date: string }>(content: T[]): Promise<T[]> {
   try {
+    if (shouldUseMongoReports()) {
+      try {
+        return await mongoReportCache.filterHiddenContent(content);
+      } catch (error) {
+        console.warn('Firestore report cache filter failed, falling back to file cache:', error);
+      }
+    }
+
     // Check and clear cache if needed
     await checkAndClearWeeklyCache();
     
@@ -236,6 +291,14 @@ export async function getReportStats(): Promise<{
   lastClearYear: number;
 }> {
   try {
+    if (shouldUseMongoReports()) {
+      try {
+        return await mongoReportCache.getReportStats();
+      } catch (error) {
+        console.warn('Firestore report cache stats failed, falling back to file cache:', error);
+      }
+    }
+
     await checkAndClearWeeklyCache();
     
     const cache = await loadReportCache();
@@ -271,6 +334,14 @@ export async function getReportStats(): Promise<{
 // Get all reported content (for admin purposes)
 export async function getAllReportedContent(): Promise<ReportedContent[]> {
   try {
+    if (shouldUseMongoReports()) {
+      try {
+        return await mongoReportCache.getAllReportedContent();
+      } catch (error) {
+        console.warn('Firestore report cache listing failed, falling back to file cache:', error);
+      }
+    }
+
     await checkAndClearWeeklyCache();
     
     const cache = await loadReportCache();
@@ -284,6 +355,14 @@ export async function getAllReportedContent(): Promise<ReportedContent[]> {
 // Clear all reports (admin function)
 export async function clearAllReports(): Promise<void> {
   try {
+    if (shouldUseMongoReports()) {
+      try {
+        await mongoReportCache.clearAllReports();
+      } catch (error) {
+        console.warn('Firestore report cache clear failed, falling back to file cache:', error);
+      }
+    }
+
     const now = new Date();
     const { week, year } = getISOWeek(now);
     

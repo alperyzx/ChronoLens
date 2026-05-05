@@ -24,6 +24,17 @@ interface CacheEntry {
   createdAt: number; // Unix timestamp
 }
 
+export interface PersistedCacheEntry {
+  data: CachedHistoricalEvent[];
+  expiresAt: number;
+  createdAt: number;
+  viewType: 'today' | 'week';
+}
+
+export interface PersistedCacheRecord extends PersistedCacheEntry {
+  key: string;
+}
+
 interface CacheStats {
   hits: number;
   misses: number;
@@ -210,6 +221,87 @@ export async function getCacheData(key: string): Promise<CachedHistoricalEvent[]
     // Record as miss
     await updateStats(false);
     return undefined; // Graceful degradation
+  }
+}
+
+// Get the full persisted cache entry, including timestamps, for migration/backfill use.
+export async function getCacheRecord(key: string, viewType: 'today' | 'week'): Promise<PersistedCacheEntry | undefined> {
+  try {
+    const filePath = getCacheFilePath(key);
+
+    try {
+      const fileContent = await fs.readFile(filePath, 'utf8');
+      const cacheEntry: CacheEntry = JSON.parse(fileContent);
+
+      const now = Date.now();
+      if (now > cacheEntry.expiresAt) {
+        try {
+          await fs.unlink(filePath);
+        } catch {
+          // Ignore unlink errors
+        }
+        await updateStats(false);
+        return undefined;
+      }
+
+      return {
+        data: cacheEntry.data,
+        expiresAt: cacheEntry.expiresAt,
+        createdAt: cacheEntry.createdAt,
+        viewType,
+      };
+    } catch {
+      await updateStats(false);
+      return undefined;
+    }
+  } catch (error) {
+    console.error('Error getting file cache record:', error);
+    await updateStats(false);
+    return undefined;
+  }
+}
+
+export async function listCacheRecords(): Promise<PersistedCacheRecord[]> {
+  try {
+    await ensureCacheDir();
+    const cacheDir = getCacheDir();
+    const files = await fs.readdir(cacheDir);
+    const records: PersistedCacheRecord[] = [];
+
+    for (const file of files) {
+      if (!file.endsWith('.json') || file.startsWith('_cache_stats') || file.startsWith('_report_cache') || file.startsWith('_cache_admin_attempts')) {
+        continue;
+      }
+
+      const filePath = path.join(cacheDir, file);
+
+      try {
+        const fileContent = await fs.readFile(filePath, 'utf8');
+        const cacheEntry: CacheEntry = JSON.parse(fileContent);
+
+        if (Date.now() > cacheEntry.expiresAt) {
+          continue;
+        }
+
+        const key = file.replace(/\.json$/, '');
+        const viewType: 'today' | 'week' = key.includes('_week_') ? 'week' : 'today';
+
+        records.push({
+          key,
+          data: cacheEntry.data,
+          expiresAt: cacheEntry.expiresAt,
+          createdAt: cacheEntry.createdAt,
+          viewType,
+        });
+      } catch {
+        // Ignore invalid cache files during hydration.
+      }
+    }
+
+    return records;
+  } catch (error) {
+    console.error('Error listing file cache records:', error);
+    return [];
   }
 }
 

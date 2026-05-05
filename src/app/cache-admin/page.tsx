@@ -16,6 +16,7 @@ interface CacheStats {
   hits: number;
   misses: number;
   hitRate: number;
+  backend?: 'mongodb' | 'file';
   expirationInfo?: {
     today: {
       expiresAt: string;
@@ -205,6 +206,12 @@ export default function CacheAdmin() {
                     {(stats.hitRate * 100).toFixed(1)}%
                   </Badge>
                 </div>
+                {stats.backend && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Storage Backend:</span>
+                    <Badge variant="outline">{stats.backend === 'mongodb' ? 'Firestore Enterprise' : 'File Cache'}</Badge>
+                  </div>
+                )}
                 <div className="text-xs text-muted-foreground">
                   Last updated: {new Date(stats.timestamp).toLocaleString()}
                 </div>
@@ -368,7 +375,7 @@ export default function CacheAdmin() {
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
-            <p><strong>Cache Strategy:</strong> File-based persistent cache (survives server restarts)</p>
+            <p><strong>Cache Strategy:</strong> Persistent cache with Firestore Enterprise as the primary backend when enabled</p>
             <p><strong>TTL Policy:</strong></p>
             <ul className="ml-4 space-y-1">
               <li>• <strong>Today view:</strong> Cache expires at midnight (daily refresh)</li>
@@ -376,7 +383,7 @@ export default function CacheAdmin() {
             </ul>
             <p><strong>Cache Keys:</strong> Format: chronolens_events_[viewType]_[category]_[date]</p>
             <p><strong>Benefits:</strong> Minimizes Gemini API requests, survives server restarts, shared cache across all users</p>
-            <p><strong>Storage:</strong> File-based cache in system temp directory (persistent)</p>
+            <p><strong>Storage:</strong> Firestore Enterprise cache with file fallback for local development and outages</p>
             <p><strong>Solution:</strong> Fixes Google Cloud server restart cache reset issues</p>
             
             <div className="mt-4 pt-4 border-t">

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { reportContent } from '@/lib/report-cache';
+import { HISTORICAL_EVENT_CATEGORIES } from '@/lib/historical-event-categories';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,9 +15,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate category
-    const validCategories = ['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art'];
-    if (!validCategories.includes(category)) {
+    // Validate category against the shared historical event categories list.
+    if (!HISTORICAL_EVENT_CATEGORIES.includes(category as (typeof HISTORICAL_EVENT_CATEGORIES)[number])) {
       return NextResponse.json(
         { error: 'Invalid category' },
         { status: 400 }

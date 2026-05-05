@@ -37,19 +37,23 @@ Implemented a **persistent file-based cache system** to minimize Gemini API requ
 
 ### 2. Cache Strategies Available
 
-#### File-based Cache (Default - Recommended)
-- **Location**: `src/lib/cache-file.ts`
-- **Persistence**: Survives server restarts
-- **Storage**: Filesystem-based JSON files
-- **Benefits**: No external dependencies, automatic persistence
-- **Environment**: `USE_FILE_CACHE=true` (default)
+#### Instance Memory Cache
+- **Location**: `src/lib/cache.ts`
+- **Persistence**: Per-process only
+- **Storage**: In-memory map
+- **Benefits**: Fastest lookup path, avoids repeated remote reads within the same server process
 
-#### Redis Cache (Optional - Production Scale)
-- **Location**: `src/lib/cache-redis.ts`
-- **Persistence**: External Redis server required
-- **Storage**: Redis key-value store
-- **Benefits**: Distributed cache, high performance, cluster support
-- **Environment**: `USE_REDIS_CACHE=true` + `REDIS_URL`
+#### Firestore-Backed Cache
+- **Location**: `src/lib/cache-mongo.ts`
+- **Persistence**: Shared remote cache
+- **Storage**: Firestore-compatible Mongo endpoint
+- **Benefits**: Survives restarts and is shared across instances
+
+#### Legacy File Cache Fallback
+- **Location**: `src/lib/cache-file.ts`
+- **Persistence**: Survives server restarts on the same machine
+- **Storage**: Filesystem-based JSON files
+- **Benefits**: Safe fallback if Firestore is unavailable
 
 ### 3. API Routes (Updated for Async)
 - **`/api/historical-events`**: Main endpoint with async cache operations
@@ -67,47 +71,33 @@ Implemented a **persistent file-based cache system** to minimize Gemini API requ
 - **Clear All**: Complete cache reset
 - **Real-time Monitoring**: Updated cache information display
 
-## Cache Behavior
+### Cache Behavior
 
-### Cache Hit (Persistent)
+### Cache Hit
 1. User requests historical events
-2. Server reads cache file from disk
-3. Checks expiration timestamp
-4. Returns cached data if still valid
-5. Response includes `cached: true` flag
+2. Server checks instance memory first
+3. If memory is empty, the server checks Firestore
+4. If Firestore misses, the request falls through to Gemini
+5. Response includes `cached: true` when served from cache
 
 ### Cache Miss (Fresh Data)
 1. User requests historical events
-2. Server finds no valid cache file (missing or expired)
+2. Server finds no valid cache entry in memory or Firestore
 3. Makes fresh Gemini AI API call
-4. Stores response as JSON file with expiration metadata
+4. Stores the response in memory and Firestore
 5. Returns fresh data with `cached: false` flag
-
-### File Management
-- **Creation**: JSON files created with unique names per cache key
-- **Expiration**: Files include expiration timestamp for validation
-- **Cleanup**: Expired files automatically deleted on access
-- **Storage**: Configurable directory (`CACHE_DIR` environment variable)
 
 ## Configuration
 
 ### Environment Variables
 ```bash
-# File cache (default - enabled)
-USE_FILE_CACHE=true
-
-# Custom cache directory (optional)
-CACHE_DIR=/path/to/persistent/cache
-
-# Redis cache (optional - for scale)
-USE_REDIS_CACHE=false
-REDIS_URL=redis://localhost:6379
+# Firestore-compatible cache backend
+MONGO_CREDENTIALS=mongodb://.../dbchronolens?retryWrites=false
 ```
 
 ### Cache Directory
 - **Default**: System temp directory (`os.tmpdir()`)
-- **Custom**: Set `CACHE_DIR` environment variable
-- **Production**: Use persistent mounted storage for `CACHE_DIR`
+- **Custom**: Set `CACHE_DIR` environment variable if you want the legacy file fallback to survive restarts
 
 ## Benefits
 
