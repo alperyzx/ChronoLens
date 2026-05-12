@@ -844,61 +844,38 @@ export default function Home() {
                   </h1>
                 </div>
                 
-                {/* Day/Week Toggle - Segmented control for stronger state feedback */}
+                {/* Day/Week Toggle - Clean and inspiring with relevant icons */}
                 <button 
                   onClick={toggleView}
-                  className={cn(
-                    "relative overflow-hidden rounded-xl border shadow-lg backdrop-blur-md transition-all duration-300 hover:scale-[1.02]",
-                    isTodayView
-                      ? "bg-white/90 border-indigo-200/70 dark:bg-slate-800/85 dark:border-indigo-700/60"
-                      : "bg-white/90 border-orange-200/70 dark:bg-slate-800/85 dark:border-orange-700/60",
-                    isHeaderShrunken ? "h-8 w-28" : "h-10 w-40"
-                  )}
+                  className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-3 py-2 shadow-md backdrop-blur-sm hover:shadow-lg transition-all duration-200 dark:border-slate-700/60 dark:bg-slate-800/70 group"
                   title={nextViewLabel}
                 >
-                  <span
-                    className={cn(
-                      "absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-lg shadow-sm transition-all duration-300",
-                      isTodayView
-                        ? "bg-gradient-to-r from-indigo-500 to-blue-500"
-                        : "bg-gradient-to-r from-orange-500 to-rose-500"
-                    )}
-                    style={{ transform: isTodayView ? 'translateX(0%)' : 'translateX(100%)' }}
-                  />
-                  <span className="relative z-10 grid h-full w-full grid-cols-2 text-[11px] font-semibold tracking-wide">
-                    <span className={cn(
-                      "flex items-center justify-center",
-                      isTodayView ? "text-white" : "text-slate-600 dark:text-slate-300"
-                    )}>
-                      Today
-                    </span>
-                    <span className={cn(
-                      "flex items-center justify-center",
-                      isTodayView ? "text-slate-600 dark:text-slate-300" : "text-white"
-                    )}>
-                      Week
-                    </span>
-                  </span>
+                  {isTodayView ? (
+                    <>
+                      <svg className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
+                      </svg>
+                      <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Today</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
+                      </svg>
+                      <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Week</span>
+                    </>
+                  )}
                 </button>
               </div>
               
-              {/* Subtitle with smooth transitions - single line */}
+              {/* Subtitle - Optional, minimal */}
               <div className={cn(
                 "overflow-hidden transition-all duration-300 ease-in-out",
                 isHeaderShrunken ? "max-h-0 opacity-0 mt-0" : "max-h-16 opacity-100 mt-1"
               )}>
-                <p className="text-slate-600 dark:text-slate-300 text-base whitespace-nowrap">
+                <p className="text-slate-600 dark:text-slate-300 text-base">
                   Discover historical events across {isTodayView ? "today" : "this week"}
                 </p>
-                <div className="mt-1 inline-flex items-center gap-2 rounded-full border border-white/50 bg-white/60 px-2.5 py-0.5 text-xs font-semibold text-slate-700 backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-800/70 dark:text-slate-200">
-                  <span
-                    className={cn(
-                      "inline-block h-2 w-2 rounded-full",
-                      isTodayView ? "bg-indigo-500 animate-pulse" : "bg-orange-500 animate-pulse"
-                    )}
-                  />
-                  {activeViewLabel}
-                </div>
               </div>
             </div>
           </div>
