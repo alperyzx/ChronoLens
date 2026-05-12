@@ -15,6 +15,7 @@ import { Navigation, Footer } from "@/components/navigation";
 import { useHeaderShrink } from "@/hooks/use-header-shrink";
 import { useToast } from "@/hooks/use-toast";
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from "@/lib/historical-event-categories";
+import { normalizeCacheDate } from "@/lib/cache-keys";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,6 +43,167 @@ type CategoryEvents = {
 };
 
 type HistoricalEventsByCategory = Record<HistoricalEventCategory, HistoricalEvent[]>;
+
+type ClientCacheEntry<T> = {
+  data: T;
+  createdAt: number;
+  expiresAt: number;
+};
+
+const CLIENT_CACHE_PREFIX = "chronolens_client_events";
+const CLIENT_CACHE_VERSION = "v3";
+const REPORTED_CONTENT_CACHE_KEY = "chronolens_reported_content_v1";
+const clientCacheMemory = new Map<string, ClientCacheEntry<unknown>>();
+const reportedContentMemory = new Set<string>();
+
+function getEventReportKey(event: Pick<HistoricalEvent, 'title' | 'category' | 'date'>): string {
+  return `${event.title}::${event.category}::${event.date}`;
+}
+
+function loadReportedContentKeys(): Set<string> {
+  if (reportedContentMemory.size > 0) {
+    return new Set(reportedContentMemory);
+  }
+
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+
+  try {
+    const raw = window.localStorage.getItem(REPORTED_CONTENT_CACHE_KEY);
+    if (!raw) {
+      return new Set();
+    }
+
+    const parsed = JSON.parse(raw) as string[];
+    if (!Array.isArray(parsed)) {
+      return new Set();
+    }
+
+    const keys = new Set(parsed);
+    for (const key of keys) {
+      reportedContentMemory.add(key);
+    }
+
+    return keys;
+  } catch {
+    return new Set();
+  }
+}
+
+function persistReportedContentKeys(keys: Set<string>): void {
+  reportedContentMemory.clear();
+  for (const key of keys) {
+    reportedContentMemory.add(key);
+  }
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(REPORTED_CONTENT_CACHE_KEY, JSON.stringify(Array.from(keys)));
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+function hasReportedEvent(reportKey: string): boolean {
+  if (reportedContentMemory.has(reportKey)) {
+    return true;
+  }
+
+  return loadReportedContentKeys().has(reportKey);
+}
+
+function markEventAsReported(reportKey: string): void {
+  const keys = loadReportedContentKeys();
+  keys.add(reportKey);
+  persistReportedContentKeys(keys);
+}
+
+function getRequestDateString(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getClientCacheKey(scope: 'single' | 'batch', viewType: 'today' | 'week', date: string, category?: string): string {
+  const normalizedDate = normalizeCacheDate(date, viewType);
+  return [CLIENT_CACHE_PREFIX, CLIENT_CACHE_VERSION, scope, viewType, normalizedDate, category || 'all'].join('_');
+}
+
+function getClientCacheExpiration(viewType: 'today' | 'week'): number {
+  const now = new Date();
+
+  if (viewType === 'today') {
+    const tomorrow = new Date(now);
+    tomorrow.setDate(now.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    return tomorrow.getTime();
+  }
+
+  const endOfWeek = new Date(now);
+  const currentDay = now.getDay();
+  const daysUntilSunday = currentDay === 0 ? 7 : 7 - currentDay;
+
+  endOfWeek.setDate(now.getDate() + daysUntilSunday);
+  endOfWeek.setHours(0, 0, 0, 0);
+  return endOfWeek.getTime();
+}
+
+function getClientCache<T>(key: string): T | undefined {
+  const memoryEntry = clientCacheMemory.get(key);
+
+  if (memoryEntry) {
+    if (Date.now() <= memoryEntry.expiresAt) {
+      return memoryEntry.data as T;
+    }
+
+    clientCacheMemory.delete(key);
+  }
+
+  if (typeof window === "undefined") {
+    return undefined;
+  }
+
+  try {
+    const rawEntry = window.localStorage.getItem(key);
+    if (!rawEntry) {
+      return undefined;
+    }
+
+    const parsedEntry = JSON.parse(rawEntry) as ClientCacheEntry<T>;
+    if (!parsedEntry?.expiresAt || Date.now() > parsedEntry.expiresAt) {
+      window.localStorage.removeItem(key);
+      clientCacheMemory.delete(key);
+      return undefined;
+    }
+
+    clientCacheMemory.set(key, parsedEntry);
+    return parsedEntry.data;
+  } catch {
+    return undefined;
+  }
+}
+
+function setClientCache<T>(key: string, data: T, viewType: 'today' | 'week'): void {
+  const entry: ClientCacheEntry<T> = {
+    data,
+    createdAt: Date.now(),
+    expiresAt: getClientCacheExpiration(viewType),
+  };
+
+  clientCacheMemory.set(key, entry);
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(key, JSON.stringify(entry));
+  } catch {
+    // Ignore storage quota / privacy mode failures.
+  }
+}
 
 // Category Icons - Modern SVG icons
 const categoryIcons = {
@@ -105,9 +267,18 @@ const categoryBackgrounds = {
 };
 
 async function getHistoricalEventsForCategory(category: string, isTodayView: boolean): Promise<{events: HistoricalEvent[], cached: boolean}> {
-  const today = new Date();
-  const dateString = today.toISOString().slice(0, 10);
   const viewType = isTodayView ? 'today' : 'week';
+  const dateString = getRequestDateString();
+  const clientCacheKey = getClientCacheKey('single', viewType, dateString, category);
+
+  const cachedClientData = getClientCache<HistoricalEvent[]>(clientCacheKey);
+  if (cachedClientData) {
+    console.log(`${category} events served from client cache`);
+    return {
+      events: cachedClientData,
+      cached: true,
+    };
+  }
   
   try {
     // Call our cached API endpoint instead of direct AI call
@@ -125,6 +296,10 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
     
     // Log cache status for monitoring
     console.log(`${category} events ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
+
+    if (Array.isArray(result.data)) {
+      setClientCache(clientCacheKey, result.data, viewType);
+    }
     
     return {
       events: result.data || [],
@@ -140,9 +315,18 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
 }
 
 async function getHistoricalEventsForAllCategories(isTodayView: boolean): Promise<{eventsByCategory: HistoricalEventsByCategory, cached: boolean}> {
-  const today = new Date();
-  const dateString = today.toISOString().slice(0, 10);
   const viewType = isTodayView ? 'today' : 'week';
+  const dateString = getRequestDateString();
+  const clientCacheKey = getClientCacheKey('batch', viewType, dateString);
+
+  const cachedClientData = getClientCache<HistoricalEventsByCategory>(clientCacheKey);
+  if (cachedClientData) {
+    console.log(`All categories served from client cache`);
+    return {
+      eventsByCategory: cachedClientData,
+      cached: true,
+    };
+  }
 
   const response = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}`);
 
@@ -168,6 +352,10 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean): Promis
 
   console.log(`All categories ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
 
+  if (result.dataByCategory) {
+    setClientCache(clientCacheKey, eventsByCategory, viewType);
+  }
+
   return {
     eventsByCategory,
     cached: result.cached || false,
@@ -181,6 +369,7 @@ export default function Home() {
   const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
   const [reportingContent, setReportingContent] = useState<Record<string, boolean>>({});
+  const [reportedContent, setReportedContent] = useState<Record<string, boolean>>({});
   const [confirmReportEvent, setConfirmReportEvent] = useState<HistoricalEvent | null>(null);
   const categories = HISTORICAL_EVENT_CATEGORIES;
   // Use a simpler logic: expand header when all accordions are closed
@@ -233,6 +422,16 @@ export default function Home() {
       localStorage.setItem("isTodayView", String(isTodayView));
     }
   }, [isTodayView]);
+
+  useEffect(() => {
+    const keys = loadReportedContentKeys();
+    const reportedMap = Array.from(keys).reduce((accumulator, key) => {
+      accumulator[key] = true;
+      return accumulator;
+    }, {} as Record<string, boolean>);
+
+    setReportedContent(reportedMap);
+  }, []);
 
   const fetchCategoryEvents = async (category: string) => {
     setLoadingCategories(prev => ({ ...prev, [category]: true }));
@@ -298,6 +497,9 @@ export default function Home() {
   const toggleView = () => {
     setIsTodayView(!isTodayView);
   };
+
+  const activeViewLabel = isTodayView ? "Today View" : "Week View";
+  const nextViewLabel = isTodayView ? "Switch to Week View" : "Switch to Today View";
 
   // Share content function - Enhanced for mobile devices
   const shareContent = async (event: HistoricalEvent) => {
@@ -402,6 +604,15 @@ export default function Home() {
     }
   };  // Report content function
   const showReportConfirmation = (event: HistoricalEvent) => {
+    const reportKey = getEventReportKey(event);
+    if (hasReportedEvent(reportKey)) {
+      toast({
+        title: "Already Reported",
+        description: "You already reported this event.",
+      });
+      return;
+    }
+
     setConfirmReportEvent(event);
   };
 
@@ -409,7 +620,16 @@ export default function Home() {
     if (!confirmReportEvent) return;
     
     const event = confirmReportEvent;
-    const reportKey = `${event.title}-${event.category}-${event.date}`;
+    const reportKey = getEventReportKey(event);
+
+    if (hasReportedEvent(reportKey)) {
+      setConfirmReportEvent(null);
+      toast({
+        title: "Already Reported",
+        description: "You already reported this event.",
+      });
+      return;
+    }
     
     setReportingContent(prev => ({ ...prev, [reportKey]: true }));
     setConfirmReportEvent(null); // Close the dialog
@@ -430,6 +650,9 @@ export default function Home() {
       const result = await response.json();
       
       if (result.success) {
+        markEventAsReported(reportKey);
+        setReportedContent(prev => ({ ...prev, [reportKey]: true }));
+
         toast({
           title: "Content Reported",
           description: result.message,
@@ -460,13 +683,35 @@ export default function Home() {
   };
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900 antialiased flex flex-col">
+    <div
+      className={cn(
+        "relative min-h-screen antialiased flex flex-col transition-colors duration-700",
+        isTodayView
+          ? "bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900"
+          : "bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 dark:from-slate-900 dark:via-amber-950/40 dark:to-rose-950/40"
+      )}
+    >
       <Navigation />
       
       
       {/* Modern animated background */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(120,119,198,0.15),rgba(255,255,255,0))]"></div>
+        <div
+          className={cn(
+            "absolute inset-0 transition-opacity duration-700",
+            isTodayView ? "opacity-100" : "opacity-0"
+          )}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(120,119,198,0.15),rgba(255,255,255,0))]"></div>
+        </div>
+        <div
+          className={cn(
+            "absolute inset-0 transition-opacity duration-700",
+            isTodayView ? "opacity-0" : "opacity-100"
+          )}
+        >
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(251,191,36,0.18),rgba(255,255,255,0)),radial-gradient(circle_at_80%_85%,rgba(244,63,94,0.16),rgba(255,255,255,0))]"></div>
+        </div>
         
         {/* Content-aligned floating geometric shapes */}
         <div className="container mx-auto px-4 h-full relative">
@@ -568,7 +813,10 @@ export default function Home() {
       
       {/* Header - Sticky with Responsive Design */}
       <div className={cn(
-        "sticky top-0 z-40 bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out will-change-padding",
+        "sticky top-0 z-40 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out will-change-padding",
+        isTodayView
+          ? "bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95"
+          : "bg-gradient-to-br from-amber-50/95 via-orange-50/95 to-rose-50/95 dark:from-slate-900/95 dark:via-amber-950/40 dark:to-rose-950/40",
         isHeaderShrunken ? "py-2" : "py-4"
       )}>
         <div className="container mx-auto px-4">
@@ -596,43 +844,61 @@ export default function Home() {
                   </h1>
                 </div>
                 
-                {/* Day/Week Toggle - Aligned to right edge */}
+                {/* Day/Week Toggle - Segmented control for stronger state feedback */}
                 <button 
                   onClick={toggleView}
                   className={cn(
-                    "bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200/50 dark:border-slate-700/50 rounded-lg shadow-lg hover:bg-white/90 dark:hover:bg-slate-800/90 transition-all duration-300 hover:scale-105 flex items-center justify-center",
-                    isHeaderShrunken ? "p-1.5 scale-90 w-6 h-6" : "p-2.5 w-8 h-8"
+                    "relative overflow-hidden rounded-xl border shadow-lg backdrop-blur-md transition-all duration-300 hover:scale-[1.02]",
+                    isTodayView
+                      ? "bg-white/90 border-indigo-200/70 dark:bg-slate-800/85 dark:border-indigo-700/60"
+                      : "bg-white/90 border-orange-200/70 dark:bg-slate-800/85 dark:border-orange-700/60",
+                    isHeaderShrunken ? "h-8 w-28" : "h-10 w-40"
                   )}
-                  title={isTodayView ? "Switch to Week View" : "Switch to Today View"}
+                  title={nextViewLabel}
                 >
-                  <div className={cn(
-                    "transition-all duration-300 ease-in-out flex items-center justify-center",
-                    isHeaderShrunken ? "w-6 h-6" : "w-8 h-8"
-                  )}>
-                    {isTodayView ? (
-                      // Today Icon - Calendar with dot
-                      <svg className="w-5 h-5 md:w-6 md:h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        <circle cx="12" cy="15" r="2" fill="currentColor" />
-                      </svg>
-                    ) : (
-                      // Week Icon - Grid
-                      <svg className="w-5 h-5 md:w-6 md:h-6 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                      </svg>
+                  <span
+                    className={cn(
+                      "absolute top-1 bottom-1 left-1 w-[calc(50%-0.25rem)] rounded-lg shadow-sm transition-all duration-300",
+                      isTodayView
+                        ? "bg-gradient-to-r from-indigo-500 to-blue-500"
+                        : "bg-gradient-to-r from-orange-500 to-rose-500"
                     )}
-                  </div>
+                    style={{ transform: isTodayView ? 'translateX(0%)' : 'translateX(100%)' }}
+                  />
+                  <span className="relative z-10 grid h-full w-full grid-cols-2 text-[11px] font-semibold tracking-wide">
+                    <span className={cn(
+                      "flex items-center justify-center",
+                      isTodayView ? "text-white" : "text-slate-600 dark:text-slate-300"
+                    )}>
+                      Today
+                    </span>
+                    <span className={cn(
+                      "flex items-center justify-center",
+                      isTodayView ? "text-slate-600 dark:text-slate-300" : "text-white"
+                    )}>
+                      Week
+                    </span>
+                  </span>
                 </button>
               </div>
               
               {/* Subtitle with smooth transitions - single line */}
               <div className={cn(
                 "overflow-hidden transition-all duration-300 ease-in-out",
-                isHeaderShrunken ? "max-h-0 opacity-0 mt-0" : "max-h-6 opacity-100 mt-1"
+                isHeaderShrunken ? "max-h-0 opacity-0 mt-0" : "max-h-16 opacity-100 mt-1"
               )}>
                 <p className="text-slate-600 dark:text-slate-300 text-base whitespace-nowrap">
                   Discover historical events across {isTodayView ? "today" : "this week"}
                 </p>
+                <div className="mt-1 inline-flex items-center gap-2 rounded-full border border-white/50 bg-white/60 px-2.5 py-0.5 text-xs font-semibold text-slate-700 backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-800/70 dark:text-slate-200">
+                  <span
+                    className={cn(
+                      "inline-block h-2 w-2 rounded-full",
+                      isTodayView ? "bg-indigo-500 animate-pulse" : "bg-orange-500 animate-pulse"
+                    )}
+                  />
+                  {activeViewLabel}
+                </div>
               </div>
             </div>
           </div>
@@ -715,8 +981,9 @@ export default function Home() {
                         ) : historicalEvents[category] && historicalEvents[category].length > 0 ? (
                           <div className="space-y-3">
                             {historicalEvents[category].map((event: any, index: number) => {
-                              const reportKey = `${event.title}-${event.category}-${event.date}`;
+                              const reportKey = getEventReportKey(event);
                               const isReporting = reportingContent[reportKey] || false;
+                              const isReported = reportedContent[reportKey] || false;
                               
                               return (
                                 <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-md transition-all duration-200 hover:scale-[1.005]">
@@ -736,14 +1003,18 @@ export default function Home() {
                                           {/* Report button */}
                                           <button
                                             onClick={() => showReportConfirmation(event)}
-                                            disabled={isReporting}
+                                            disabled={isReporting || isReported}
                                             className="w-7 h-7 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-all duration-200 group/report disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title="Report inappropriate content"
+                                            title={isReported ? "Already reported by you" : "Report inappropriate content"}
                                           >
                                             {isReporting ? (
                                               <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
                                                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                              </svg>
+                                            ) : isReported ? (
+                                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                               </svg>
                                             ) : (
                                               <svg className="w-3.5 h-3.5 group-hover/report:scale-105 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -55,38 +55,69 @@ function getWeekDateRange(): { startDate: string; endDate: string; monthDay: str
   };
 }
 
+function parseEventMonthDay(date: string): { month: number; day: number } | undefined {
+  const trimmedDate = date.trim();
+
+  const isoMatch = trimmedDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoMatch) {
+    return {
+      month: Number(isoMatch[2]),
+      day: Number(isoMatch[3]),
+    };
+  }
+
+  const monthDayMatch = trimmedDate.match(/^(\d{1,2})-(\d{1,2})$/);
+  if (monthDayMatch) {
+    return {
+      month: Number(monthDayMatch[1]),
+      day: Number(monthDayMatch[2]),
+    };
+  }
+
+  const parsedDate = new Date(trimmedDate);
+  if (!Number.isNaN(parsedDate.getTime())) {
+    return {
+      month: parsedDate.getMonth() + 1,
+      day: parsedDate.getDate(),
+    };
+  }
+
+  return undefined;
+}
+
+function isEventInDateRange(eventDate: string, startMM_DD: string, endMM_DD: string): boolean {
+  const parsedMonthDay = parseEventMonthDay(eventDate);
+  if (!parsedMonthDay) {
+    return false;
+  }
+
+  const [startMonth, startDay] = startMM_DD.split('-').map(Number);
+  const [endMonth, endDay] = endMM_DD.split('-').map(Number);
+  const { month, day } = parsedMonthDay;
+
+  if (startMonth === endMonth) {
+    return month === startMonth && day >= startDay && day <= endDay;
+  }
+
+  const inFirstMonth = month === startMonth && day >= startDay;
+  const inSecondMonth = month === endMonth && day <= endDay;
+  return inFirstMonth || inSecondMonth;
+}
+
 // Helper function to validate that event dates fall within the expected range
 function filterEventsByDateRange(
   events: GenerateHistoricalEventsOutput,
   startMM_DD: string,
   endMM_DD: string
 ): GenerateHistoricalEventsOutput {
-  const [startMonth, startDay] = startMM_DD.split('-').map(Number);
-  const [endMonth, endDay] = endMM_DD.split('-').map(Number);
-  
   return events.filter(event => {
-    if (!event.date || !/^\d{4}-\d{2}-\d{2}$/.test(event.date)) {
-      console.warn(`Filtered out event with invalid date format: ${event.title}`);
+    if (!event.date) {
+      console.warn(`Filtered out event with missing date: ${event.title}`);
       return false;
     }
-    
-    const [, eventMonthStr, eventDayStr] = event.date.split('-');
-    const eventMonth = parseInt(eventMonthStr, 10);
-    const eventDay = parseInt(eventDayStr, 10);
-    
-    // Check if the event falls within the week range
-    let isValid = false;
-    
-    if (startMonth === endMonth) {
-      // Week is within the same month
-      isValid = eventMonth === startMonth && eventDay >= startDay && eventDay <= endDay;
-    } else {
-      // Week spans two months (e.g., Nov 30 - Dec 6)
-      const inFirstMonth = eventMonth === startMonth && eventDay >= startDay;
-      const inSecondMonth = eventMonth === endMonth && eventDay <= endDay;
-      isValid = inFirstMonth || inSecondMonth;
-    }
-    
+
+    const isValid = isEventInDateRange(event.date, startMM_DD, endMM_DD);
+
     if (!isValid) {
       console.warn(`Filtered out event with date outside week range: ${event.title} (${event.date})`);
     }
@@ -154,6 +185,7 @@ Source validation:
 Output rules:
 - Return only a JSON array
 - Each event must include title, date, description, category, and source
+- Date must be written as YYYY-MM-DD
 - Category must match the requested category`;
 
 const SINGLE_EVENT_TODAY_CACHE_INSTRUCTIONS = `${SHARED_SINGLE_EVENT_CACHE_INSTRUCTIONS}
@@ -199,6 +231,7 @@ Output rules:
 - Return only a JSON object
 - Include exactly one key for each category
 - Each event must include title, date, description, category, and source
+- Date must be written as YYYY-MM-DD
 - The category field must match the key it belongs to`;
 
 const BATCH_EVENT_TODAY_CACHE_INSTRUCTIONS = `${SHARED_BATCH_EVENT_CACHE_INSTRUCTIONS}

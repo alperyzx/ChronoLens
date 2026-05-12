@@ -1,58 +1,56 @@
 # Cache Solution Summary - ChronoLens
 
 ## Problem Solved ✅
-**Google Cloud Server Restart Cache Reset Issue**
-- When Google Cloud stops/restarts servers due to low traffic, the in-memory NodeCache was reset
-- Users experienced cache misses after server restarts, causing unnecessary Gemini API calls
-- Cache performance benefits were lost after each restart
+**Repeated Weekly Refreshes and Unnecessary Gemini Calls**
+- Weekly events were keyed by the current day, so every new day inside the same week looked like a cache miss
+- That triggered extra Gemini API calls and extra Mongo writes even when the same week had already been loaded
+- The client now checks a browser cache first, then the server memory cache, then MongoDB, and only falls back to Gemini when all caches miss
 
 ## Solution Implemented 🚀
 
-### 1. File-Based Persistent Cache
-- **Created**: `src/lib/cache-file.ts` - Complete file-based cache implementation
-- **Storage**: JSON files in system temp directory (or custom `CACHE_DIR`)
-- **Persistence**: Survives server restarts, deployments, and shutdowns
-- **Expiration**: Files include timestamps for automatic expiration validation
-- **Cleanup**: Automatic removal of expired cache files
+### 1. Client Cache Layer
+- **Added**: browser-side cache for today and week responses
+- **Storage**: localStorage plus an in-memory fallback for the active tab
+- **Benefit**: repeated view loads can avoid the network entirely
+- **Expiration**: today expires at midnight, week expires at the end of the current week
 
-### 2. Updated Cache Interface
-- **Modified**: `src/lib/cache.ts` - Now uses file-based cache by default
-- **Backward Compatible**: Same API interface, now with async operations
-- **Environment Control**: `USE_FILE_CACHE=true` (default enabled)
-- **Graceful Degradation**: Cache failures don't break the application
+### 2. Server Cache Order
+- **Server memory cache** is checked after the client cache and before any database lookup
+- **MongoDB cache** is the persistent server-side cache of record
+- **Gemini** is only called if the client cache, server memory cache, and MongoDB cache are empty
+- **Normalization**: week requests are keyed by the week start date, not the current day
 
 ### 3. API Routes Updated
-- **Updated**: All cache API routes to handle async operations
-- **Enhanced**: Added cleanup endpoint for expired cache management
-- **Maintained**: Same response format and behavior for clients
+- **Updated**: `/api/historical-events` now uses the normalized cache key for week scope
+- **Improved**: cache reads no longer double-check validity before reading data
+- **Maintained**: same response format and behavior for clients
 
-### 4. Admin Interface Enhanced
-- **Added**: Cache file statistics (size, expired files, total files)
-- **Added**: "Cleanup Expired Cache" button for maintenance
-- **Updated**: Information panel reflects file-based cache benefits
-- **Monitoring**: Real-time file system cache metrics
+### 4. Persistent Storage
+- **MongoDB cache** remains the durable server-side store for safe persistence
+- **File cache** still exists as a fallback for environments without MongoDB
+- **Expiration**: today view expires at midnight, week view expires at the end of the week
 
 ### 5. Configuration & Documentation
-- **Updated**: `.env.example` with cache configuration options
-- **Enhanced**: `docs/cache-implementation.md` with comprehensive details
-- **Environment**: Clear configuration options for different cache strategies
+- **Updated**: cache keys now use a week bucket so the same week reuses the same entry
+- **Documented**: the cache order now reflects client -> server -> MongoDB -> Gemini
+- **Environment**: cache failures still degrade gracefully without breaking the app
 
 ## Key Benefits 🎯
 
-### ✅ Persistence Across Restarts
-- Cache survives Google Cloud server restarts
-- No cache warm-up needed after restarts
-- Consistent performance regardless of server lifecycle
+### ✅ Fewer Gemini Calls
+- Same-day requests reuse the client cache after the first load
+- Same-week requests now reuse the same cache key for the full week
+- No more daily refresh for a week-scoped response unless the cache actually expires
 
 ### ✅ Cost Optimization Maintained
-- Still maximum 6 API calls per day (today view) 
-- Still maximum 6 API calls per week (week view)
-- API savings persist across server restarts
+- Today view still refreshes once per day at most
+- Week view now refreshes once per week at most
+- Gemini usage drops because cache misses no longer happen every day for the same week
 
 ### ✅ Performance Improvement
-- Fast cache reads from disk (still very fast)
-- No cold starts after server restarts
-- Shared cache across all users and instances
+- Browser cache removes repeat fetches for the same session and view
+- Server memory and MongoDB preserve fast reads and durable persistence
+- Cache lookup order stops work as early as possible
 
 ### ✅ Operational Excellence
 - Admin interface for cache management
@@ -65,10 +63,11 @@
 ### Cache Strategy
 ```javascript
 // Cache order
-// 1. Instance memory
-// 2. Firestore-compatible Mongo endpoint
-// 3. Legacy file cache fallback
-MONGO_CREDENTIALS=mongodb://.../dbchronolens?retryWrites=false
+// 1. Client cache
+// 2. Server memory cache
+// 3. MongoDB cache
+// 4. Gemini API
+// 5. File cache fallback when MongoDB is unavailable
 ```
 
 ### File Structure
@@ -76,7 +75,7 @@ MONGO_CREDENTIALS=mongodb://.../dbchronolens?retryWrites=false
 /tmp/chronolens-cache/  (or custom CACHE_DIR)
 ├── chronolens_events_today_Sociology_2025-07-09.json
 ├── chronolens_events_today_Technology_2025-07-09.json
-├── chronolens_events_week_Science_This_Week.json
+├── chronolens_events_week_Science_2025-07-06.json
 └── ... (other cache files)
 ```
 
@@ -90,10 +89,10 @@ MONGO_CREDENTIALS=mongodb://.../dbchronolens?retryWrites=false
 ```
 
 ## Migration Path
-- **Zero Downtime**: File cache automatically replaces NodeCache
-- **No Client Changes**: Frontend continues working without modifications
-- **Backward Compatible**: All existing API endpoints work the same way
-- **Environment Controlled**: Can switch cache strategies via environment variables
+- **Zero Downtime**: the cache key fix applies without changing the API contract
+- **No Client Changes**: frontend continues using the same endpoint and parameters
+- **Backward Compatible**: existing stored entries still work until they expire
+- **Environment Controlled**: MongoDB remains optional, with fallback behavior preserved
 
 ## Monitoring & Maintenance
 - **Cache Admin**: `/cache-admin` page for real-time monitoring
@@ -103,4 +102,4 @@ MONGO_CREDENTIALS=mongodb://.../dbchronolens?retryWrites=false
   - `DELETE /api/cache-stats` - Clear all cache
 - **Logs**: Console logging for cache operations and performance
 
-This solution completely resolves the Google Cloud server restart cache reset issue while maintaining all the performance and cost benefits of the original cache implementation. 🎉
+This solution now prevents week-view cache churn, keeps the browser cache in front of the server, and preserves the persistence benefits of the Mongo-backed cache. 🎉

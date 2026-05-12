@@ -4,12 +4,13 @@ import {
   getCacheData, 
   setCacheData, 
   generateCacheKey, 
-  hasValidCache,
   type CacheKey,
   type CachedHistoricalEvent 
 } from '@/lib/cache';
 import { filterHiddenContent } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from '@/lib/historical-event-categories';
+
+const CACHE_VERSION = 'v3';
 
 export async function GET(request: NextRequest) {
   try {
@@ -51,7 +52,7 @@ export async function GET(request: NextRequest) {
             date,
             category: currentCategory,
             viewType: viewType as 'today' | 'week',
-            version: 'v2',
+            version: CACHE_VERSION,
           };
 
           const key = generateCacheKey(cacheKey);
@@ -113,14 +114,12 @@ export async function GET(request: NextRequest) {
             date,
             category: currentCategory,
             viewType: viewType as 'today' | 'week',
-            version: 'v2',
+            version: CACHE_VERSION,
           };
 
           const key = generateCacheKey(cacheKey);
 
-          if (cachedEvents.length > 0) {
-            await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
-          }
+          await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
 
           const filteredEvents = await filterHiddenContent(cachedEvents);
           return [currentCategory, filteredEvents] as const;
@@ -139,24 +138,22 @@ export async function GET(request: NextRequest) {
       date,
       category: category as HistoricalEventCategory,
       viewType: viewType as 'today' | 'week',
-      version: 'v2',
+      version: CACHE_VERSION,
     };
     
     const key = generateCacheKey(cacheKey);
 
     // Check cache first
-    if (await hasValidCache(key)) {
-      const cachedData = await getCacheData(key);
-      if (cachedData) {
-        // Filter out reported content before returning
-        const filteredData = await filterHiddenContent(cachedData);
-        
-        return NextResponse.json({
-          data: filteredData,
-          cached: true,
-          timestamp: new Date().toISOString()
-        });
-      }
+    const cachedData = await getCacheData(key);
+    if (cachedData) {
+      // Filter out reported content before returning
+      const filteredData = await filterHiddenContent(cachedData);
+      
+      return NextResponse.json({
+        data: filteredData,
+        cached: true,
+        timestamp: new Date().toISOString()
+      });
     }
 
     // Cache miss - fetch from AI
@@ -187,10 +184,7 @@ export async function GET(request: NextRequest) {
       source: event.source
     }));
 
-    // Only cache successful responses with data
-    if (cachedEvents.length > 0) {
-      await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
-    }
+    await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
 
     // Filter out reported content before returning to client
     const filteredEvents = await filterHiddenContent(cachedEvents);
