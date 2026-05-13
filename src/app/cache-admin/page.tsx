@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 import { Footer } from "@/components/navigation";
 import { CacheAdminAuthGuard } from "./auth-guard";
 
@@ -52,6 +53,7 @@ interface ReportedContentItem {
 }
 
 export default function CacheAdmin() {
+  const { toast } = useToast();
   const [stats, setStats] = useState<CacheStats | null>(null);
   const [reportStats, setReportStats] = useState<ReportStats | null>(null);
   const [reportedContent, setReportedContent] = useState<ReportedContentItem[]>([]);
@@ -176,10 +178,26 @@ export default function CacheAdmin() {
       });
 
       if (response.ok) {
+        const data = await response.json();
+        toast({
+          title: "Content Recovered",
+          description: `"${item.title}" is now visible. Report count: ${data.reportCount || 0}`,
+        });
         await Promise.all([fetchReportStats(), fetchReportedContent()]);
+      } else {
+        toast({
+          title: "Recovery Failed",
+          description: "Unable to recover the content. Please try again.",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error('Failed to recover reported content:', error);
+      toast({
+        title: "Error",
+        description: "An error occurred while recovering the content.",
+        variant: "destructive",
+      });
     } finally {
       setRecoveringKey(null);
     }
