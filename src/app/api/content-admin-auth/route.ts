@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyPassword } from '@/lib/cache-admin-auth';
+import { verifyPassword } from '@/lib/content-admin-auth';
 
 export async function POST(request: NextRequest) {
   try {

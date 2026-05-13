@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Footer } from "@/components/navigation";
-import { CacheAdminAuthGuard } from "./auth-guard";
+import { ContentAdminAuthGuard } from "./auth-guard";
 
 interface CacheStats {
   keys: number;
@@ -52,7 +52,7 @@ interface ReportedContentItem {
   year: number;
 }
 
-export default function CacheAdmin() {
+export default function ContentAdmin() {
   const { toast } = useToast();
   const [stats, setStats] = useState<CacheStats | null>(null);
   const [reportStats, setReportStats] = useState<ReportStats | null>(null);
@@ -227,10 +227,10 @@ export default function CacheAdmin() {
             </div>
             <div>
               <h1 className="text-4xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 bg-clip-text text-transparent">
-                Cache Administration
+                Content Administration
               </h1>
               <p className="text-slate-600 dark:text-slate-300 text-lg">
-                Monitor and manage the server-side cache for historical events
+                Monitor and manage content reporting, moderation, and cache behavior
               </p>
             </div>
           </div>
@@ -368,6 +368,35 @@ export default function CacheAdmin() {
                       Report cache automatically clears each week
                     </div>
                   </div>
+                  <div className="pt-4 border-t space-y-2">
+                    <Button
+                      onClick={fetchReportStats}
+                      disabled={loadingReports}
+                      className="w-full"
+                      variant="outline"
+                    >
+                      {loadingReports ? "Refreshing..." : "Refresh Report Stats"}
+                    </Button>
+                    <Button
+                      onClick={fetchReportedContent}
+                      disabled={loadingReportedContent}
+                      className="w-full"
+                      variant="outline"
+                    >
+                      {loadingReportedContent ? 'Refreshing...' : 'Refresh Review Panel'}
+                    </Button>
+                    <Button
+                      onClick={clearAllReports}
+                      disabled={clearingReports}
+                      className="w-full"
+                      variant="destructive"
+                    >
+                      {clearingReports ? "Clearing..." : "Clear All Reports"}
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Warning: This will unhide all reported content until re-reported.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 <p className="text-muted-foreground">Failed to load report statistics</p>
@@ -400,24 +429,6 @@ export default function CacheAdmin() {
             </div>
             <div>
               <Button 
-                onClick={fetchReportStats} 
-                disabled={loadingReports}
-                className="w-full mb-2"
-                variant="outline"
-              >
-                {loadingReports ? "Refreshing..." : "Refresh Report Stats"}
-              </Button>
-              <Button
-                onClick={fetchReportedContent}
-                disabled={loadingReportedContent}
-                className="w-full mb-2"
-                variant="outline"
-              >
-                {loadingReportedContent ? 'Refreshing...' : 'Refresh Review Panel'}
-              </Button>
-            </div>
-            <div>
-              <Button 
                 onClick={cleanupExpiredCache} 
                 disabled={cleaning}
                 className="w-full mb-2"
@@ -440,19 +451,6 @@ export default function CacheAdmin() {
               </Button>
               <p className="text-xs text-muted-foreground mb-4">
                 Warning: This will force fresh API calls for all subsequent requests.
-              </p>
-            </div>
-            <div>
-              <Button 
-                onClick={clearAllReports} 
-                disabled={clearingReports}
-                className="w-full"
-                variant="destructive"
-              >
-                {clearingReports ? "Clearing..." : "Clear All Reports"}
-              </Button>
-              <p className="text-xs text-muted-foreground mt-2">
-                Warning: This will unhide all reported content until re-reported.
               </p>
             </div>
           </CardContent>
@@ -522,7 +520,7 @@ export default function CacheAdmin() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Cache & Reporting Information</CardTitle>
+          <CardTitle>Content & Reporting Information</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="space-y-2 text-sm">
@@ -556,8 +554,8 @@ export default function CacheAdmin() {
   );
 
   return (
-    <CacheAdminAuthGuard>
+    <ContentAdminAuthGuard>
       {adminContent}
-    </CacheAdminAuthGuard>
+    </ContentAdminAuthGuard>
   );
 }

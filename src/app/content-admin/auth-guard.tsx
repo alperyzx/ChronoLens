@@ -10,7 +10,7 @@ interface AuthGuardProps {
   children: React.ReactNode;
 }
 
-export function CacheAdminAuthGuard({ children }: AuthGuardProps) {
+export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -19,7 +19,7 @@ export function CacheAdminAuthGuard({ children }: AuthGuardProps) {
 
   // Check if already authenticated on mount
   useEffect(() => {
-    const authenticated = localStorage.getItem('cache-admin-authenticated');
+    const authenticated = localStorage.getItem('content-admin-authenticated');
     if (authenticated === 'true') {
       setIsAuthenticated(true);
     }
@@ -31,7 +31,7 @@ export function CacheAdminAuthGuard({ children }: AuthGuardProps) {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/cache-admin-auth', {
+      const response = await fetch('/api/content-admin-auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
@@ -41,7 +41,7 @@ export function CacheAdminAuthGuard({ children }: AuthGuardProps) {
 
       if (response.ok && data.valid) {
         setIsAuthenticated(true);
-        localStorage.setItem('cache-admin-authenticated', 'true');
+        localStorage.setItem('content-admin-authenticated', 'true');
         setPassword('');
         setError('');
       } else {
@@ -59,7 +59,7 @@ export function CacheAdminAuthGuard({ children }: AuthGuardProps) {
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    localStorage.removeItem('cache-admin-authenticated');
+    localStorage.removeItem('content-admin-authenticated');
     setPassword('');
     setError('');
     setAttemptsLeft(2);
@@ -94,9 +94,9 @@ export function CacheAdminAuthGuard({ children }: AuthGuardProps) {
                     </svg>
                   </div>
                 </div>
-                <CardTitle className="text-2xl text-center">Cache Administration</CardTitle>
+                <CardTitle className="text-2xl text-center">Content Administration</CardTitle>
                 <CardDescription className="text-center">
-                  Enter your password to access the cache admin panel
+                  Enter your password to access the content administration panel
                 </CardDescription>
               </CardHeader>
               <CardContent>

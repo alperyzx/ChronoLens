@@ -65,7 +65,7 @@ Implemented a **persistent file-based cache system** to minimize Gemini API requ
 - API interface remains the same
 - Cache operations are transparent to frontend
 
-### 5. Admin Interface (`/cache-admin`)
+### 5. Admin Interface (`/content-admin`)
 - **Enhanced Statistics**: File count, storage size, expired files
 - **Cleanup Function**: Remove only expired cache files
 - **Clear All**: Complete cache reset
@@ -187,7 +187,7 @@ const key = `events_${viewType}_${category}_${date}`;
 ## Usage
 
 ### For Developers
-1. **Development**: Cache admin available at `/cache-admin`
+1. **Development**: Content admin available at `/content-admin`
 2. **Monitoring**: Check cache performance via API or admin panel
 3. **Debugging**: Console logs show cache hit/miss status
 

@@ -95,7 +95,7 @@
 - **Environment Controlled**: MongoDB remains optional, with fallback behavior preserved
 
 ## Monitoring & Maintenance
-- **Cache Admin**: `/cache-admin` page for real-time monitoring
+- **Content Admin**: `/content-admin` page for real-time monitoring
 - **API Endpoints**: 
   - `GET /api/cache-stats-enhanced` - Detailed statistics
   - `POST /api/cache-stats-enhanced` - Cleanup expired files
