@@ -395,3 +395,22 @@ export async function clearAllReports(): Promise<void> {
     console.error('Error clearing Firestore report cache:', error);
   }
 }
+
+export async function recoverReportedContent(title: string, category: string, date: string): Promise<boolean> {
+  try {
+    await hydrateFromLegacyFileCache();
+    const database = await getDatabase();
+    if (!database) {
+      return false;
+    }
+
+    await clearWeeklyIfNeeded(database);
+    const contentHash = generateContentHash(title, category, date);
+    const result = await database.collection<ReportDocument>(REPORTS_COLLECTION).deleteOne({ _id: contentHash });
+
+    return result.deletedCount > 0;
+  } catch (error) {
+    console.error('Error recovering reported content in Firestore cache:', error);
+    return false;
+  }
+}

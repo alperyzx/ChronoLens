@@ -145,22 +145,27 @@ async function checkAndClearWeeklyCache(): Promise<void> {
 // Report content
 export async function reportContent(title: string, category: string, date: string): Promise<{ success: boolean; reportCount: number; isHidden: boolean }> {
   try {
+    let result: { success: boolean; reportCount: number; isHidden: boolean };
+
     if (shouldUseMongoReports()) {
       try {
-        const result = await mongoReportCache.reportContent(title, category, date);
+        const mongoResult = await mongoReportCache.reportContent(title, category, date);
 
         try {
           const fileResult = await reportContentToFileOnly(title, category, date);
-          return fileResult.success ? fileResult : result;
+          result = fileResult.success ? fileResult : mongoResult;
         } catch {
-          return result;
+          result = mongoResult;
         }
       } catch (error) {
         console.warn('Firestore report cache write failed, falling back to file cache:', error);
+        result = await reportContentToFileOnly(title, category, date);
       }
+    } else {
+      result = await reportContentToFileOnly(title, category, date);
     }
 
-    return await reportContentToFileOnly(title, category, date);
+    return result;
   } catch (error) {
     console.error('Error reporting content:', error);
     return {
@@ -376,5 +381,32 @@ export async function clearAllReports(): Promise<void> {
     console.log('All reports cleared manually');
   } catch (error) {
     console.error('Error clearing all reports:', error);
+  }
+}
+
+export async function recoverReportedContent(title: string, category: string, date: string): Promise<boolean> {
+  try {
+    if (shouldUseMongoReports()) {
+      try {
+        await mongoReportCache.recoverReportedContent(title, category, date);
+      } catch (error) {
+        console.warn('Firestore report cache recovery failed, falling back to file cache:', error);
+      }
+    }
+
+    await checkAndClearWeeklyCache();
+    const cache = await loadReportCache();
+    const contentHash = generateContentHash(title, category, date);
+
+    if (!cache.reportedContent[contentHash]) {
+      return false;
+    }
+
+    delete cache.reportedContent[contentHash];
+    await saveReportCache(cache);
+    return true;
+  } catch (error) {
+    console.error('Error recovering reported content:', error);
+    return false;
   }
 }

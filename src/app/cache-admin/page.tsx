@@ -41,14 +41,27 @@ interface ReportStats {
   lastClearYear: number;
 }
 
+interface ReportedContentItem {
+  title: string;
+  category: string;
+  date: string;
+  reportCount: number;
+  reportedAt: number;
+  weekNumber: number;
+  year: number;
+}
+
 export default function CacheAdmin() {
   const [stats, setStats] = useState<CacheStats | null>(null);
   const [reportStats, setReportStats] = useState<ReportStats | null>(null);
+  const [reportedContent, setReportedContent] = useState<ReportedContentItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingReports, setLoadingReports] = useState(false);
+  const [loadingReportedContent, setLoadingReportedContent] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [clearingReports, setClearingReports] = useState(false);
   const [cleaning, setCleaning] = useState(false);
+  const [recoveringKey, setRecoveringKey] = useState<string | null>(null);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -77,6 +90,29 @@ export default function CacheAdmin() {
       console.error('Failed to fetch report stats:', error);
     } finally {
       setLoadingReports(false);
+    }
+  };
+
+  const fetchReportedContent = async () => {
+    setLoadingReportedContent(true);
+    try {
+      const response = await fetch('/api/report-stats?action=all');
+      if (response.ok) {
+        const data = await response.json();
+        const items: ReportedContentItem[] = Array.isArray(data.reportedContent) ? data.reportedContent : [];
+        setReportedContent(
+          [...items].sort((a, b) => {
+            if (b.reportCount !== a.reportCount) {
+              return b.reportCount - a.reportCount;
+            }
+            return b.reportedAt - a.reportedAt;
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Failed to fetch reported content:', error);
+    } finally {
+      setLoadingReportedContent(false);
     }
   };
 
@@ -114,6 +150,7 @@ export default function CacheAdmin() {
       const response = await fetch('/api/report-stats', { method: 'DELETE' });
       if (response.ok) {
         await fetchReportStats(); // Refresh stats after clearing
+        setReportedContent([]);
       }
     } catch (error) {
       console.error('Failed to clear reports:', error);
@@ -122,9 +159,36 @@ export default function CacheAdmin() {
     }
   };
 
+  const recoverReportedItem = async (item: ReportedContentItem) => {
+    const key = `${item.title}::${item.category}::${item.date}`;
+    setRecoveringKey(key);
+    try {
+      const response = await fetch('/api/report-stats', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: item.title,
+          category: item.category,
+          date: item.date,
+        }),
+      });
+
+      if (response.ok) {
+        await Promise.all([fetchReportStats(), fetchReportedContent()]);
+      }
+    } catch (error) {
+      console.error('Failed to recover reported content:', error);
+    } finally {
+      setRecoveringKey(null);
+    }
+  };
+
   useEffect(() => {
     fetchStats();
     fetchReportStats();
+    fetchReportedContent();
   }, []);
 
   const adminContent = (
@@ -325,6 +389,14 @@ export default function CacheAdmin() {
               >
                 {loadingReports ? "Refreshing..." : "Refresh Report Stats"}
               </Button>
+              <Button
+                onClick={fetchReportedContent}
+                disabled={loadingReportedContent}
+                className="w-full mb-2"
+                variant="outline"
+              >
+                {loadingReportedContent ? 'Refreshing...' : 'Refresh Review Panel'}
+              </Button>
             </div>
             <div>
               <Button 
@@ -368,6 +440,67 @@ export default function CacheAdmin() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="mt-6 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-0 shadow-xl">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <svg className="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>Reported Content Review</span>
+          </CardTitle>
+          <CardDescription>
+            Review all reports, recover hidden items, and keep moderation transparent.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {loadingReportedContent ? (
+            <div className="space-y-2">
+              <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ) : reportedContent.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No reported content found for this week.</p>
+          ) : (
+            <div className="space-y-3">
+              {reportedContent.map((item) => {
+                const key = `${item.title}::${item.category}::${item.date}`;
+                const isHidden = item.reportCount >= 5;
+                const isRecovering = recoveringKey === key;
+
+                return (
+                  <div key={key} className="rounded-lg border border-slate-200/70 dark:border-slate-700/70 p-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <p className="font-medium text-sm text-slate-800 dark:text-slate-100">{item.title}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.category} • {item.date} • Last report: {new Date(item.reportedAt).toLocaleString()}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">Reports: {item.reportCount}</Badge>
+                          <Badge variant={isHidden ? 'destructive' : 'outline'}>
+                            {isHidden ? 'Hidden' : 'Visible'}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <Button
+                        onClick={() => recoverReportedItem(item)}
+                        disabled={isRecovering}
+                        variant="outline"
+                        className="min-w-24"
+                      >
+                        {isRecovering ? 'Recovering...' : 'Recover'}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <Card className="mt-6">
         <CardHeader>
