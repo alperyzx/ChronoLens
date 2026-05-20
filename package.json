@@ -77,5 +77,8 @@
     "uuid": "14.0.0",
     "@google-cloud/common": "6.0.0",
     "@google-cloud/opentelemetry-cloud-monitoring-exporter": "0.21.0"
+    ,"@opentelemetry/sdk-node": "^0.217.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.75.0",
+    "protobufjs": "^7.5.8"
   }
 }
