@@ -55,6 +55,10 @@ export const getTTLUntilMidnight = fileCache.getTTLUntilMidnight;
 export const getTTLUntilEndOfWeek = fileCache.getTTLUntilEndOfWeek;
 export const getTTLForViewType = fileCache.getTTLForViewType;
 export const getCacheExpirationInfo = fileCache.getCacheExpirationInfo;
+export const acquireCacheLock = fileCache.acquireCacheLock;
+export const releaseCacheLock = fileCache.releaseCacheLock;
+export const isCacheLockActive = fileCache.isCacheLockActive;
+export const waitForCacheLockRelease = fileCache.waitForCacheLockRelease;
 
 // Async wrapper functions to maintain backward compatibility with the API
 export async function setCacheData(key: string, data: fileCache.CachedHistoricalEvent[], viewType: 'today' | 'week'): Promise<void> {

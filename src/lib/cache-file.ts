@@ -42,8 +42,15 @@ interface CacheStats {
   lastUpdated: number;
 }
 
+interface CacheLockEntry {
+  acquiredAt: number;
+  expiresAt: number;
+}
+
 const TODAY_TTL_SECONDS = 24 * 60 * 60;
 const WEEK_TTL_SECONDS = 7 * 24 * 60 * 60;
+const DEFAULT_LOCK_TTL_MS = 4 * 60 * 1000;
+const LOCK_POLL_INTERVAL_MS = 1000;
 
 // Get cache directory path
 function getCacheDir(): string {
@@ -66,6 +73,12 @@ function getStatsFilePath(): string {
   return path.join(cacheDir, '_cache_stats.json');
 }
 
+function getLockFilePath(key: string): string {
+  const cacheDir = getCacheDir();
+  const sanitizedKey = key.replace(/[^a-zA-Z0-9-_:]/g, '_');
+  return path.join(cacheDir, `${sanitizedKey}.lock.json`);
+}
+
 // Ensure cache directory exists
 async function ensureCacheDir(): Promise<void> {
   const cacheDir = getCacheDir();
@@ -74,6 +87,115 @@ async function ensureCacheDir(): Promise<void> {
   } catch (error) {
     console.error('Error creating cache directory:', error);
   }
+}
+
+async function readLockEntry(lockPath: string): Promise<CacheLockEntry | undefined> {
+  try {
+    const content = await fs.readFile(lockPath, 'utf8');
+    const parsed = JSON.parse(content) as CacheLockEntry;
+
+    if (!parsed || typeof parsed.acquiredAt !== 'number' || typeof parsed.expiresAt !== 'number') {
+      return undefined;
+    }
+
+    return parsed;
+  } catch {
+    return undefined;
+  }
+}
+
+async function removeLockFile(lockPath: string): Promise<void> {
+  try {
+    await fs.unlink(lockPath);
+  } catch {
+    // Ignore cleanup failures.
+  }
+}
+
+async function writeLockFile(lockPath: string, lockEntry: CacheLockEntry): Promise<boolean> {
+  try {
+    await fs.writeFile(lockPath, JSON.stringify(lockEntry, null, 2), { flag: 'wx' });
+    return true;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'EEXIST') {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+export async function acquireCacheLock(key: string, lockTtlMs: number = DEFAULT_LOCK_TTL_MS): Promise<boolean> {
+  try {
+    await ensureCacheDir();
+
+    const lockPath = getLockFilePath(key);
+    const now = Date.now();
+    const lockEntry: CacheLockEntry = {
+      acquiredAt: now,
+      expiresAt: now + lockTtlMs,
+    };
+
+    const acquired = await writeLockFile(lockPath, lockEntry);
+    if (acquired) {
+      return true;
+    }
+
+    const existingLock = await readLockEntry(lockPath);
+    if (existingLock && existingLock.expiresAt > now) {
+      return false;
+    }
+
+    await removeLockFile(lockPath);
+
+    return await writeLockFile(lockPath, lockEntry);
+  } catch (error) {
+    console.error('Error acquiring cache lock:', error);
+    return false;
+  }
+}
+
+export async function releaseCacheLock(key: string): Promise<void> {
+  await removeLockFile(getLockFilePath(key));
+}
+
+export async function isCacheLockActive(key: string): Promise<boolean> {
+  try {
+    const lockPath = getLockFilePath(key);
+    const existingLock = await readLockEntry(lockPath);
+
+    if (!existingLock) {
+      return false;
+    }
+
+    if (Date.now() > existingLock.expiresAt) {
+      await removeLockFile(lockPath);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error checking cache lock:', error);
+    return false;
+  }
+}
+
+export async function waitForCacheLockRelease(
+  key: string,
+  timeoutMs: number = DEFAULT_LOCK_TTL_MS,
+  pollIntervalMs: number = LOCK_POLL_INTERVAL_MS
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    if (!(await isCacheLockActive(key))) {
+      return true;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+  }
+
+  return !(await isCacheLockActive(key));
 }
 
 // Update cache statistics
