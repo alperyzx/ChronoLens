@@ -53,6 +53,7 @@ type ClientCacheEntry<T> = {
 const CLIENT_CACHE_PREFIX = "chronolens_client_events";
 const CLIENT_CACHE_VERSION = "v3";
 const REPORTED_CONTENT_CACHE_KEY = "chronolens_reported_content_v1";
+const WARMUP_PREVIEW_CACHE_KEY = "chronolens_warmup_preview_v1";
 const clientCacheMemory = new Map<string, ClientCacheEntry<unknown>>();
 const reportedContentMemory = new Set<string>();
 
@@ -366,6 +367,9 @@ export default function Home() {
   const [isTodayView, setIsTodayView] = useState(true);
   const [historicalEvents, setHistoricalEvents] = useState<CategoryEvents>({});
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
+  const [showFirstVisitAnimation, setShowFirstVisitAnimation] = useState(false);
+  const [warmupPreviewEnabled, setWarmupPreviewEnabled] = useState(false);
+  const [warmupPreviewReady, setWarmupPreviewReady] = useState(process.env.NODE_ENV === "production");
   const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
   const [reportingContent, setReportingContent] = useState<Record<string, boolean>>({});
@@ -376,7 +380,17 @@ export default function Home() {
   const baseHeaderShrunken = useHeaderShrink(100);
   const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
   const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const initialLoadTimerRef = useRef<number | null>(null);
+  const [warmupCategoryIndex, setWarmupCategoryIndex] = useState(0);
+  const hasShownFirstVisitAnimationRef = useRef(false);
   const { toast } = useToast();
+
+  const clearInitialLoadTimer = () => {
+    if (initialLoadTimerRef.current !== null && typeof window !== "undefined") {
+      window.clearTimeout(initialLoadTimerRef.current);
+      initialLoadTimerRef.current = null;
+    }
+  };
 
   // Handle accordion value changes and smooth scroll
   const handleAccordionChange = (value: string[]) => {
@@ -424,6 +438,34 @@ export default function Home() {
   }, [isTodayView]);
 
   useEffect(() => {
+    if (typeof window === "undefined" || process.env.NODE_ENV === "production") {
+      setWarmupPreviewReady(true);
+      return;
+    }
+
+    const searchParams = new URLSearchParams(window.location.search);
+    const queryValue = searchParams.get("warmupPreview");
+    const storedValue = window.localStorage.getItem(WARMUP_PREVIEW_CACHE_KEY);
+
+    if (queryValue === "1") {
+      window.localStorage.setItem(WARMUP_PREVIEW_CACHE_KEY, "true");
+      setWarmupPreviewEnabled(true);
+      setWarmupPreviewReady(true);
+      return;
+    }
+
+    if (queryValue === "0") {
+      window.localStorage.removeItem(WARMUP_PREVIEW_CACHE_KEY);
+      setWarmupPreviewEnabled(false);
+      setWarmupPreviewReady(true);
+      return;
+    }
+
+    setWarmupPreviewEnabled(storedValue === "true");
+    setWarmupPreviewReady(true);
+  }, []);
+
+  useEffect(() => {
     const keys = loadReportedContentKeys();
     const reportedMap = Array.from(keys).reduce((accumulator, key) => {
       accumulator[key] = true;
@@ -432,6 +474,29 @@ export default function Home() {
 
     setReportedContent(reportedMap);
   }, []);
+
+  useEffect(() => {
+    return () => {
+      clearInitialLoadTimer();
+    };
+  }, []);
+
+  const shouldShowWarmupBanner = isTodayView && (showFirstVisitAnimation || warmupPreviewEnabled);
+
+  useEffect(() => {
+    if (!shouldShowWarmupBanner) {
+      setWarmupCategoryIndex(0);
+      return;
+    }
+
+      const intervalId = window.setInterval(() => {
+      setWarmupCategoryIndex(currentIndex => (currentIndex + 1) % categories.length);
+      }, 2000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [shouldShowWarmupBanner, categories.length]);
 
   const fetchCategoryEvents = async (category: string) => {
     setLoadingCategories(prev => ({ ...prev, [category]: true }));
@@ -454,6 +519,25 @@ export default function Home() {
   };
 
   const fetchAllEvents = async () => {
+    const viewType = isTodayView ? 'today' : 'week';
+    const shouldShowWarmupAnimation = viewType === 'today';
+    const shouldForceWarmupPreview = process.env.NODE_ENV !== "production" && warmupPreviewEnabled && isTodayView;
+    let shouldShowFirstVisitAnimation = false;
+
+    if (shouldForceWarmupPreview) {
+      hasShownFirstVisitAnimationRef.current = true;
+      shouldShowFirstVisitAnimation = true;
+      clearInitialLoadTimer();
+      setShowFirstVisitAnimation(true);
+    } else if (shouldShowWarmupAnimation && !hasShownFirstVisitAnimationRef.current) {
+      hasShownFirstVisitAnimationRef.current = true;
+      shouldShowFirstVisitAnimation = true;
+      clearInitialLoadTimer();
+      initialLoadTimerRef.current = window.setTimeout(() => {
+        setShowFirstVisitAnimation(true);
+      }, 350);
+    }
+
     // Initialize loading state for all categories
     const initialLoadingState: Record<string, boolean> = {};
     categories.forEach(cat => {
@@ -481,6 +565,11 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to fetch all categories', error);
     } finally {
+      if (!shouldForceWarmupPreview && shouldShowFirstVisitAnimation) {
+        clearInitialLoadTimer();
+        setShowFirstVisitAnimation(false);
+      }
+
       setLoadingCategories(
         categories.reduce((accumulator, category) => {
           accumulator[category] = false;
@@ -491,8 +580,12 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (!warmupPreviewReady) {
+      return;
+    }
+
     fetchAllEvents();
-  }, [isTodayView]);
+  }, [isTodayView, warmupPreviewReady]);
 
   const toggleView = () => {
     setIsTodayView(!isTodayView);
@@ -885,7 +978,61 @@ export default function Home() {
       {/* Main Content */}
       <div className="container mx-auto px-4 pb-8 relative z-10 flex-1" style={{ scrollPaddingTop: '96px' }}>
         <div className="max-w-6xl mx-auto pt-4">
-          <div className="w-full">
+            {shouldShowWarmupBanner && (
+            <div className="mb-6 flex justify-center" role="status" aria-live="polite">
+              <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/15 bg-white/15 px-6 py-8 text-center shadow-[0_24px_90px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:bg-slate-950/35">
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(96,165,250,0.18),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(244,114,182,0.14),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(250,204,21,0.14),transparent_28%)]" />
+                <div className="relative flex flex-col items-center gap-5">
+                  <div className="relative flex h-28 w-28 items-center justify-center">
+                    <div className="absolute inset-0 rounded-full border border-slate-300/60 animate-[spin_14s_linear_infinite] dark:border-indigo-400/25" />
+                    <div className="absolute inset-4 rounded-full border border-sky-400/45 animate-[spin_10s_linear_infinite_reverse] dark:border-cyan-300/35" />
+                    <div className="absolute inset-8 rounded-full border border-fuchsia-400/30 animate-pulse dark:border-fuchsia-300/25" />
+                    <div className="absolute inset-11 rounded-full bg-gradient-to-br from-white/30 via-cyan-200/30 to-fuchsia-200/30 blur-xl" />
+                    <Icons.spinner className="relative h-11 w-11 text-slate-700 animate-spin drop-shadow-[0_0_18px_rgba(255,255,255,0.35)] dark:text-white dark:drop-shadow-[0_0_18px_rgba(255,255,255,0.6)]" />
+                  </div>
+
+                  <div className="space-y-2 max-w-lg">
+                    <div className="inline-flex items-center rounded-full border border-slate-300/70 bg-white/70 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-900 shadow-sm dark:border-white/20 dark:bg-white/10 dark:text-white/80">
+                      One-time warmup
+                    </div>
+                    <h2 className="text-2xl font-bold tracking-tight text-slate-950 drop-shadow-[0_1px_0_rgba(255,255,255,0.55)] dark:text-white md:text-4xl">
+                      Brewing the first chronicle
+                    </h2>
+                    <p className="text-balance text-sm leading-6 text-slate-800 dark:text-white/75 md:text-base">
+                      Welcome to ChronoLens. We’re preparing your first curated set of events.
+                    </p>
+                  </div>
+
+                  <div className="flex w-full max-w-md items-end justify-center gap-2 pt-1" aria-hidden="true">
+                    <span className="h-3 w-3 rounded-full bg-cyan-300 animate-bounce [animation-delay:-0.3s]" />
+                    <span className="h-5 w-3 rounded-full bg-sky-300 animate-bounce [animation-delay:-0.15s]" />
+                    <span className="h-7 w-3 rounded-full bg-fuchsia-300 animate-bounce" />
+                    <span className="h-4 w-3 rounded-full bg-amber-300 animate-bounce [animation-delay:-0.2s]" />
+                    <span className="h-3 w-3 rounded-full bg-emerald-300 animate-bounce [animation-delay:-0.35s]" />
+                  </div>
+
+                  <div className="flex w-full items-center justify-center gap-3 pt-1" aria-live="polite" aria-atomic="true">
+                    <div className="relative h-8 w-[11rem] overflow-hidden rounded-full border border-slate-300/60 bg-white/70 shadow-sm dark:border-white/10 dark:bg-white/10">
+                      <div
+                        className="flex h-full transition-transform duration-500 ease-in-out"
+                        style={{ transform: `translateX(-${warmupCategoryIndex * 100}%)` }}
+                      >
+                        {categories.map((category) => (
+                          <div key={category} className="flex h-full min-w-full items-center justify-center px-3">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-900 dark:text-white">
+                              {category}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+            <div className={cn("w-full", shouldShowWarmupBanner && "hidden")}>
             <Accordion 
               type="multiple" 
               className="space-y-4"
