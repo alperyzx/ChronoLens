@@ -53,7 +53,6 @@ type ClientCacheEntry<T> = {
 const CLIENT_CACHE_PREFIX = "chronolens_client_events";
 const CLIENT_CACHE_VERSION = "v3";
 const REPORTED_CONTENT_CACHE_KEY = "chronolens_reported_content_v1";
-const WARMUP_PREVIEW_CACHE_KEY = "chronolens_warmup_preview_v1";
 const clientCacheMemory = new Map<string, ClientCacheEntry<unknown>>();
 const reportedContentMemory = new Set<string>();
 
@@ -445,23 +444,14 @@ export default function Home() {
 
     const searchParams = new URLSearchParams(window.location.search);
     const queryValue = searchParams.get("warmupPreview");
-    const storedValue = window.localStorage.getItem(WARMUP_PREVIEW_CACHE_KEY);
 
     if (queryValue === "1") {
-      window.localStorage.setItem(WARMUP_PREVIEW_CACHE_KEY, "true");
       setWarmupPreviewEnabled(true);
       setWarmupPreviewReady(true);
       return;
     }
 
-    if (queryValue === "0") {
-      window.localStorage.removeItem(WARMUP_PREVIEW_CACHE_KEY);
-      setWarmupPreviewEnabled(false);
-      setWarmupPreviewReady(true);
-      return;
-    }
-
-    setWarmupPreviewEnabled(storedValue === "true");
+    setWarmupPreviewEnabled(false);
     setWarmupPreviewReady(true);
   }, []);
 
