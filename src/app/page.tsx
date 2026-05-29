@@ -51,7 +51,7 @@ type ClientCacheEntry<T> = {
 };
 
 const CLIENT_CACHE_PREFIX = "chronolens_client_events";
-const CLIENT_CACHE_VERSION = "v3";
+const CLIENT_CACHE_VERSION = "v4";
 const REPORTED_CONTENT_CACHE_KEY = "chronolens_reported_content_v1";
 const clientCacheMemory = new Map<string, ClientCacheEntry<unknown>>();
 const reportedContentMemory = new Set<string>();
@@ -150,6 +150,10 @@ function getClientCacheExpiration(viewType: 'today' | 'week'): number {
   return endOfWeek.getTime();
 }
 
+function hasAnyHistoricalEventsByCategory(eventsByCategory: HistoricalEventsByCategory): boolean {
+  return Object.values(eventsByCategory).some(events => Array.isArray(events) && events.length > 0);
+}
+
 function getClientCache<T>(key: string): T | undefined {
   const memoryEntry = clientCacheMemory.get(key);
 
@@ -173,6 +177,17 @@ function getClientCache<T>(key: string): T | undefined {
 
     const parsedEntry = JSON.parse(rawEntry) as ClientCacheEntry<T>;
     if (!parsedEntry?.expiresAt || Date.now() > parsedEntry.expiresAt) {
+      window.localStorage.removeItem(key);
+      clientCacheMemory.delete(key);
+      return undefined;
+    }
+
+    if (
+      parsedEntry.data &&
+      typeof parsedEntry.data === 'object' &&
+      !Array.isArray(parsedEntry.data) &&
+      Object.values(parsedEntry.data as Record<string, unknown>).every(value => Array.isArray(value) && value.length === 0)
+    ) {
       window.localStorage.removeItem(key);
       clientCacheMemory.delete(key);
       return undefined;
@@ -297,7 +312,7 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
     // Log cache status for monitoring
     console.log(`${category} events ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
 
-    if (Array.isArray(result.data)) {
+    if (Array.isArray(result.data) && result.data.length > 0) {
       setClientCache(clientCacheKey, result.data, viewType);
     }
     
@@ -352,7 +367,7 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean): Promis
 
   console.log(`All categories ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
 
-  if (result.dataByCategory) {
+  if (result.dataByCategory && hasAnyHistoricalEventsByCategory(eventsByCategory)) {
     setClientCache(clientCacheKey, eventsByCategory, viewType);
   }
 
