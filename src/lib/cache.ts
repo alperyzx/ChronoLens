@@ -3,20 +3,20 @@ import * as fileCache from './cache-file';
 import * as mongoCache from './cache-mongo';
 
 // Re-export types from file cache
-export type { CachedHistoricalEvent, CacheKey } from './cache-file';
+export type { CachedHistoricalEvent, CachedHistoricalEventSelection, CacheKey } from './cache-file';
 
 function shouldUseMongoCache(): boolean {
   return Boolean(process.env.MONGO_CREDENTIALS);
 }
 
 type MemoryCacheEntry = {
-  data: fileCache.CachedHistoricalEvent[];
+  data: fileCache.CachedHistoricalEventSelection;
   expiresAt: number;
 };
 
 const instanceCache = new Map<string, MemoryCacheEntry>();
 
-function getMemoryCacheEntry(key: string): fileCache.CachedHistoricalEvent[] | undefined {
+function getMemoryCacheEntry(key: string): fileCache.CachedHistoricalEventSelection | undefined {
   const entry = instanceCache.get(key);
   if (!entry) {
     return undefined;
@@ -30,7 +30,7 @@ function getMemoryCacheEntry(key: string): fileCache.CachedHistoricalEvent[] | u
   return entry.data;
 }
 
-function setMemoryCacheEntry(key: string, data: fileCache.CachedHistoricalEvent[], viewType: 'today' | 'week'): void {
+function setMemoryCacheEntry(key: string, data: fileCache.CachedHistoricalEventSelection, viewType: 'today' | 'week'): void {
   const expiresAt = Date.now() + (fileCache.getTTLForViewType(viewType) * 1000);
   instanceCache.set(key, { data, expiresAt });
 }
@@ -61,7 +61,7 @@ export const isCacheLockActive = fileCache.isCacheLockActive;
 export const waitForCacheLockRelease = fileCache.waitForCacheLockRelease;
 
 // Async wrapper functions to maintain backward compatibility with the API
-export async function setCacheData(key: string, data: fileCache.CachedHistoricalEvent[], viewType: 'today' | 'week'): Promise<void> {
+export async function setCacheData(key: string, data: fileCache.CachedHistoricalEventSelection, viewType: 'today' | 'week'): Promise<void> {
   setMemoryCacheEntry(key, data, viewType);
 
   if (shouldUseMongoCache()) {
@@ -76,7 +76,7 @@ export async function setCacheData(key: string, data: fileCache.CachedHistorical
   return fileCache.setCacheData(key, data, viewType);
 }
 
-export async function getCacheData(key: string): Promise<fileCache.CachedHistoricalEvent[] | undefined> {
+export async function getCacheData(key: string): Promise<fileCache.CachedHistoricalEventSelection | undefined> {
   const memoryData = getMemoryCacheEntry(key);
   if (memoryData) {
     return memoryData;

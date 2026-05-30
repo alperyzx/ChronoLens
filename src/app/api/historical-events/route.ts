@@ -8,13 +8,14 @@ import {
   setCacheData, 
   generateCacheKey, 
   type CacheKey,
-  type CachedHistoricalEvent 
+  type CachedHistoricalEvent,
+  type CachedHistoricalEventSelection,
 } from '@/lib/cache';
 import { normalizeCacheDate } from '@/lib/cache-keys';
 import { filterHiddenContent } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from '@/lib/historical-event-categories';
 
-const CACHE_VERSION = 'v3';
+const CACHE_VERSION = 'v6';
 const GENERATION_LOCK_TTL_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_WAIT_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_POLL_MS = 1000;
@@ -23,17 +24,22 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function isEmptySelection(selection?: CachedHistoricalEventSelection | null): boolean {
+  return !selection || selection.count <= 0 || !Array.isArray(selection.events) || selection.events.length === 0;
+}
+
 function getGenerationLockKey(date: string, viewType: 'today' | 'week', scope: 'batch' | HistoricalEventCategory): string {
   const normalizedDate = normalizeCacheDate(date, viewType);
   return `chronolens_generation_${scope}_${viewType}_${normalizedDate}_${CACHE_VERSION}`;
 }
 
-async function getCachedSingleCategoryResponse(cacheKey: string): Promise<CachedHistoricalEvent[] | undefined> {
+async function getCachedSingleCategoryResponse(cacheKey: string): Promise<CachedHistoricalEventSelection | undefined> {
   if (!(await hasValidCache(cacheKey))) {
     return undefined;
   }
 
-  return await getCacheData(cacheKey);
+  const cachedSelection = await getCacheData(cacheKey);
+  return isEmptySelection(cachedSelection) ? undefined : cachedSelection;
 }
 
 async function getCachedBatchResponse(date: string, viewType: 'today' | 'week'): Promise<HistoricalEventsByCategory | undefined> {
@@ -65,11 +71,40 @@ async function getCachedBatchResponse(date: string, viewType: 'today' | 'week'):
   const dataByCategory = await Promise.all(
     cacheKeys.map(async entry => [
       entry.category,
-      await filterHiddenContent(await getCacheData(entry.key) || []),
+      await getCacheData(entry.key),
     ] as const)
   );
 
-  return Object.fromEntries(dataByCategory) as HistoricalEventsByCategory;
+  const selectionsByCategory = Object.fromEntries(dataByCategory) as HistoricalEventsByCategory;
+  const hasAnySelection = HISTORICAL_EVENT_CATEGORIES.some(category => !isEmptySelection(selectionsByCategory[category]));
+
+  return hasAnySelection ? selectionsByCategory : undefined;
+}
+
+async function getVisibleSelection(selection: CachedHistoricalEventSelection): Promise<CachedHistoricalEvent[]> {
+  const visibleEvents = await filterHiddenContent(selection.events);
+  return visibleEvents.slice(0, selection.count);
+}
+
+async function getVisibleSelectionsByCategory(selections: HistoricalEventsByCategory): Promise<Record<HistoricalEventCategory, CachedHistoricalEvent[]>> {
+  const visibleSelections = await Promise.all(
+    HISTORICAL_EVENT_CATEGORIES.map(async category => {
+      const selection = selections[category] || { count: 0, events: [] };
+      return [category, await getVisibleSelection(selection)] as const;
+    })
+  );
+
+  return Object.fromEntries(visibleSelections) as Record<HistoricalEventCategory, CachedHistoricalEvent[]>;
+}
+
+function emptySelection(): CachedHistoricalEventSelection {
+  return { count: 0, events: [] };
+}
+
+function emptySelectionsByCategory(): HistoricalEventsByCategory {
+  return Object.fromEntries(
+    HISTORICAL_EVENT_CATEGORIES.map(category => [category, emptySelection()] as const)
+  ) as HistoricalEventsByCategory;
 }
 
 async function runLockedGeneration<T>(options: {
@@ -154,15 +189,11 @@ export async function GET(request: NextRequest) {
       const cachedBatchData = await getCachedBatchResponse(date, viewType as 'today' | 'week');
 
       if (cachedBatchData) {
-        const dataByCategory = await Promise.all(
-          HISTORICAL_EVENT_CATEGORIES.map(async currentCategory => [
-            currentCategory,
-            cachedBatchData[currentCategory] || [],
-          ] as const)
-        );
+        const visibleEventsByCategory = await getVisibleSelectionsByCategory(cachedBatchData);
 
         return NextResponse.json({
-          dataByCategory: Object.fromEntries(dataByCategory),
+          dataByCategory: cachedBatchData,
+          visibleEventsByCategory,
           cached: true,
           timestamp: new Date().toISOString()
         });
@@ -174,7 +205,8 @@ export async function GET(request: NextRequest) {
         console.error('Google Gemini API key not configured');
         return NextResponse.json({
           error: 'API key not configured. Please set GOOGLE_GENAI_API_KEY in your environment variables.',
-          dataByCategory: Object.fromEntries(HISTORICAL_EVENT_CATEGORIES.map(currentCategory => [currentCategory, []])),
+          dataByCategory: emptySelectionsByCategory(),
+          visibleEventsByCategory: Object.fromEntries(HISTORICAL_EVENT_CATEGORIES.map(currentCategory => [currentCategory, []] as const)),
           cached: false,
           timestamp: new Date().toISOString()
         }, { status: 500 });
@@ -195,14 +227,11 @@ export async function GET(request: NextRequest) {
         storeFreshData: async generatedEventsByCategory => {
           await Promise.all(
             HISTORICAL_EVENT_CATEGORIES.map(async currentCategory => {
-              const events = generatedEventsByCategory[currentCategory] || [];
-              const cachedEvents: CachedHistoricalEvent[] = events.map(event => ({
-                title: event.title,
-                date: event.date,
-                description: event.description,
-                category: event.category,
-                source: event.source
-              }));
+              const cachedEvents = generatedEventsByCategory[currentCategory] || { count: 0, events: [] };
+
+              if (isEmptySelection(cachedEvents)) {
+                return;
+              }
 
               const cacheKey: CacheKey = {
                 date,
@@ -218,15 +247,11 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      const dataByCategoryEntries = await Promise.all(
-        HISTORICAL_EVENT_CATEGORIES.map(async currentCategory => {
-          const filteredEvents = await filterHiddenContent(eventsByCategory[currentCategory] || []);
-          return [currentCategory, filteredEvents] as const;
-        })
-      );
+      const visibleEventsByCategory = await getVisibleSelectionsByCategory(eventsByCategory);
 
       return NextResponse.json({
-        dataByCategory: Object.fromEntries(dataByCategoryEntries),
+        dataByCategory: eventsByCategory,
+        visibleEventsByCategory,
         cached,
         timestamp: new Date().toISOString()
       });
@@ -244,11 +269,11 @@ export async function GET(request: NextRequest) {
 
     const cachedData = await getCachedSingleCategoryResponse(key);
     if (cachedData) {
-      // Filter out reported content before returning
-      const filteredData = await filterHiddenContent(cachedData);
+      const visibleEvents = await getVisibleSelection(cachedData);
       
       return NextResponse.json({
-        data: filteredData,
+        data: cachedData,
+        visibleEvents,
         cached: true,
         timestamp: new Date().toISOString()
       });
@@ -262,7 +287,8 @@ export async function GET(request: NextRequest) {
       console.error('Google Gemini API key not configured');
       return NextResponse.json({
         error: 'API key not configured. Please set GOOGLE_GENAI_API_KEY in your environment variables.',
-        data: [],
+        data: emptySelection(),
+        visibleEvents: [],
         cached: false,
         timestamp: new Date().toISOString()
       }, { status: 500 });
@@ -277,23 +303,19 @@ export async function GET(request: NextRequest) {
         category: category as HistoricalEventCategory
       }),
       storeFreshData: async generatedEvents => {
-        const cachedEvents: CachedHistoricalEvent[] = generatedEvents.map(event => ({
-          title: event.title,
-          date: event.date,
-          description: event.description,
-          category: event.category,
-          source: event.source
-        }));
+        if (isEmptySelection(generatedEvents)) {
+          return;
+        }
 
-        await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
+        await setCacheData(key, generatedEvents, viewType as 'today' | 'week');
       }
     });
 
-    // Filter out reported content before returning to client
-    const filteredEvents = await filterHiddenContent(events);
+    const visibleEvents = await getVisibleSelection(events);
 
     return NextResponse.json({
-      data: filteredEvents,
+      data: events,
+      visibleEvents,
       cached,
       timestamp: new Date().toISOString()
     });
@@ -309,7 +331,8 @@ export async function GET(request: NextRequest) {
       error: isAPIKeyError 
         ? 'Google Gemini API key not configured properly. Please check your environment variables.'
         : 'Failed to fetch historical events. Please try again later.',
-      data: [],
+      data: emptySelection(),
+      visibleEvents: [],
       cached: false,
       timestamp: new Date().toISOString()
     }, { status: 500 });

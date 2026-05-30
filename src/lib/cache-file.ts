@@ -10,6 +10,12 @@ export interface CachedHistoricalEvent {
   description: string;
   category: string;
   source: string;
+  significanceRank: number;
+}
+
+export interface CachedHistoricalEventSelection {
+  count: number;
+  events: CachedHistoricalEvent[];
 }
 
 export type CacheKey = {
@@ -20,13 +26,13 @@ export type CacheKey = {
 };
 
 interface CacheEntry {
-  data: CachedHistoricalEvent[];
+  data: CachedHistoricalEventSelection;
   expiresAt: number; // Unix timestamp
   createdAt: number; // Unix timestamp
 }
 
 export interface PersistedCacheEntry {
-  data: CachedHistoricalEvent[];
+  data: CachedHistoricalEventSelection;
   expiresAt: number;
   createdAt: number;
   viewType: 'today' | 'week';
@@ -280,7 +286,7 @@ export function getTTLForViewType(viewType: 'today' | 'week'): number {
 }
 
 // Set cache with automatic TTL based on view type
-export async function setCacheData(key: string, data: CachedHistoricalEvent[], viewType: 'today' | 'week'): Promise<void> {
+export async function setCacheData(key: string, data: CachedHistoricalEventSelection, viewType: 'today' | 'week'): Promise<void> {
   try {
     await ensureCacheDir();
     
@@ -306,7 +312,7 @@ export async function setCacheData(key: string, data: CachedHistoricalEvent[], v
 }
 
 // Get cache data
-export async function getCacheData(key: string): Promise<CachedHistoricalEvent[] | undefined> {
+export async function getCacheData(key: string): Promise<CachedHistoricalEventSelection | undefined> {
   try {
     const filePath = getCacheFilePath(key);
     

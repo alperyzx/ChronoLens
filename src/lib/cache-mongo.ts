@@ -1,10 +1,10 @@
 import { MongoClient, type Db } from 'mongodb';
-import { getTTLForViewType, listCacheRecords, type CachedHistoricalEvent } from './cache-file';
+import { getTTLForViewType, listCacheRecords, type CachedHistoricalEventSelection } from './cache-file';
 
 type CacheDocument = {
   _id: string;
   key: string;
-  data: CachedHistoricalEvent[];
+  data: CachedHistoricalEventSelection;
   viewType: 'today' | 'week';
   expiresAt: Date;
   createdAt: Date;
@@ -59,7 +59,7 @@ function getMongoDatabaseName(uri: string): string {
   }
 }
 
-function buildCacheDocument(key: string, data: CachedHistoricalEvent[], viewType: 'today' | 'week', expiresAt: Date, createdAt: Date): CacheDocument {
+function buildCacheDocument(key: string, data: CachedHistoricalEventSelection, viewType: 'today' | 'week', expiresAt: Date, createdAt: Date): CacheDocument {
   const now = new Date();
 
   return {
@@ -156,7 +156,7 @@ async function recordStats(delta: { hits?: number; misses?: number }): Promise<v
   }
 }
 
-function toCacheDocument(key: string, data: CachedHistoricalEvent[], viewType: 'today' | 'week'): CacheDocument {
+function toCacheDocument(key: string, data: CachedHistoricalEventSelection, viewType: 'today' | 'week'): CacheDocument {
   const now = new Date();
   const ttlSeconds = getTTLForViewType(viewType);
   const expiresAt = new Date(now.getTime() + (ttlSeconds * 1000));
@@ -207,13 +207,13 @@ async function deleteExpiredDocument(key: string): Promise<void> {
   await database.collection<CacheDocument>(CACHE_COLLECTION).deleteOne({ _id: key }).catch(() => undefined);
 }
 
-export async function setCacheData(key: string, data: CachedHistoricalEvent[], viewType: 'today' | 'week'): Promise<void> {
+export async function setCacheData(key: string, data: CachedHistoricalEventSelection, viewType: 'today' | 'week'): Promise<void> {
   await upsertCacheDocument(toCacheDocument(key, data, viewType));
 }
 
 export async function setCacheDataWithExpiration(
   key: string,
-  data: CachedHistoricalEvent[],
+  data: CachedHistoricalEventSelection,
   viewType: 'today' | 'week',
   expiresAt: number,
   createdAt: number
@@ -223,7 +223,7 @@ export async function setCacheDataWithExpiration(
   );
 }
 
-export async function getCacheData(key: string): Promise<CachedHistoricalEvent[] | undefined> {
+export async function getCacheData(key: string): Promise<CachedHistoricalEventSelection | undefined> {
   try {
     const document = await readCacheDocument(key);
 

@@ -106,10 +106,10 @@ function isEventInDateRange(eventDate: string, startMM_DD: string, endMM_DD: str
 
 // Helper function to validate that event dates fall within the expected range
 function filterEventsByDateRange(
-  events: GenerateHistoricalEventsOutput,
+  events: GenerateHistoricalEventsOutput['events'],
   startMM_DD: string,
   endMM_DD: string
-): GenerateHistoricalEventsOutput {
+): GenerateHistoricalEventsOutput['events'] {
   return events.filter(event => {
     if (!event.date) {
       console.warn(`Filtered out event with missing date: ${event.title}`);
@@ -126,6 +126,36 @@ function filterEventsByDateRange(
   });
 }
 
+function filterSelectionByDateRange(
+  selection: GenerateHistoricalEventsOutput,
+  startMM_DD: string,
+  endMM_DD: string
+): GenerateHistoricalEventsOutput {
+  return {
+    count: selection.count,
+    events: filterEventsByDateRange(selection.events, startMM_DD, endMM_DD),
+  };
+}
+
+function normalizeSelection(selection: GenerateHistoricalEventsOutput): GenerateHistoricalEventsOutput {
+  const rankedEvents = [...selection.events]
+    .map((event, index) => ({
+      ...event,
+      significanceRank: event.significanceRank ?? index + 1,
+    }))
+    .sort((left, right) => left.significanceRank - right.significanceRank);
+
+  const maxPublishable = Math.min(5, rankedEvents.length || 0);
+  const normalizedCount = maxPublishable > 0
+    ? Math.max(3, Math.min(selection.count || 3, maxPublishable))
+    : 0;
+
+  return {
+    count: normalizedCount,
+    events: rankedEvents,
+  };
+}
+
 const GenerateHistoricalEventsInputSchema = z.object({
   date: z.string().describe('The date for which to retrieve historical events (YYYY-MM-DD or "This Week").'),
   category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of historical events to retrieve.'),
@@ -138,20 +168,26 @@ const HistoricalEventSchema = z.object({
   description: z.string().describe('A description of the historical event (50-100 words).'),
   category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of the historical event.'),
   source: z.string().describe('URL to a reputable source verifying this historical event.'),
+  significanceRank: z.coerce.number().int().positive().optional().describe('A 1-based ranking where 1 is the most significant event.'),
 });
 
-const GenerateHistoricalEventsOutputSchema = z.array(HistoricalEventSchema);
+const HistoricalEventSelectionSchema = z.object({
+  count: z.coerce.number().int().min(3).max(5).describe('How many events should be displayed for this category.'),
+  events: z.array(HistoricalEventSchema).describe('The ranked candidate events ordered from most significant to least significant.'),
+});
+
+const GenerateHistoricalEventsOutputSchema = HistoricalEventSelectionSchema;
 export type GenerateHistoricalEventsOutput = z.infer<typeof GenerateHistoricalEventsOutputSchema>;
 
 const HistoricalEventsByCategorySchema = z.object({
-  Sociology: z.array(HistoricalEventSchema),
-  Technology: z.array(HistoricalEventSchema),
-  Philosophy: z.array(HistoricalEventSchema),
-  Science: z.array(HistoricalEventSchema),
-  Politics: z.array(HistoricalEventSchema),
-  Art: z.array(HistoricalEventSchema),
-  Sports: z.array(HistoricalEventSchema),
-  Literature: z.array(HistoricalEventSchema),
+  Sociology: HistoricalEventSelectionSchema,
+  Technology: HistoricalEventSelectionSchema,
+  Philosophy: HistoricalEventSelectionSchema,
+  Science: HistoricalEventSelectionSchema,
+  Politics: HistoricalEventSelectionSchema,
+  Art: HistoricalEventSelectionSchema,
+  Sports: HistoricalEventSelectionSchema,
+  Literature: HistoricalEventSelectionSchema,
 });
 
 export type HistoricalEventsByCategory = z.infer<typeof HistoricalEventsByCategorySchema>;
@@ -338,8 +374,10 @@ export async function generateHistoricalEvents(input: GenerateHistoricalEventsIn
     return await generateHistoricalEventsFlow(input);
   } catch (error) {
     console.error('Error generating historical events:', error);
-    // Return empty array instead of throwing to allow partial data display
-    return [];
+    return {
+      count: 0,
+      events: [],
+    };
   }
 }
 
@@ -348,16 +386,7 @@ export async function generateHistoricalEventsByCategory(input: GenerateHistoric
     return await generateHistoricalEventsByCategoryFlow(input);
   } catch (error) {
     console.error('Error generating batch historical events:', error);
-    return {
-      Sociology: [],
-      Technology: [],
-      Philosophy: [],
-      Science: [],
-      Politics: [],
-      Art: [],
-      Sports: [],
-      Literature: [],
-    };
+    return emptyCategorySelectionMap();
   }
 }
 
@@ -385,7 +414,7 @@ const generateHistoricalEventsFlow = ai.defineFlow<
         ttlSeconds: getTTLUntilEndOfWeek(),
       });
       // Filter out any events that don't match the week range
-      return filterEventsByDateRange(weekOutput || [], weekInfo.startDate, weekInfo.endDate);
+      return normalizeSelection(filterSelectionByDateRange(weekOutput || { count: 0, events: [] }, weekInfo.startDate, weekInfo.endDate));
     }
 
     const todayOutput = await generateHistoricalEventsWithCache({
@@ -400,7 +429,7 @@ const generateHistoricalEventsFlow = ai.defineFlow<
     // Filter out any events that don't match the specific date
     const [, month, day] = date.split('-');
     const mmdd = `${month}-${day}`;
-    return filterEventsByDateRange(todayOutput || [], mmdd, mmdd);
+    return normalizeSelection(filterSelectionByDateRange(todayOutput || { count: 0, events: [] }, mmdd, mmdd));
   }
 );
 
@@ -428,7 +457,7 @@ const generateHistoricalEventsByCategoryFlow = ai.defineFlow<
         outputSchema: HistoricalEventsByCategorySchema,
         ttlSeconds: getTTLUntilEndOfWeek(),
       });
-      return filterByDateRangeForCategories(weekOutput || emptyCategoryMap(), weekInfo.startDate, weekInfo.endDate);
+      return normalizeSelectionsByCategory(filterByDateRangeForCategories(weekOutput || emptyCategorySelectionMap(), weekInfo.startDate, weekInfo.endDate));
     }
 
     const todayOutput = await generateHistoricalEventsWithCache({
@@ -441,20 +470,27 @@ const generateHistoricalEventsByCategoryFlow = ai.defineFlow<
     });
     const [, month, day] = date.split('-');
     const mmdd = `${month}-${day}`;
-    return filterByDateRangeForCategories(todayOutput || emptyCategoryMap(), mmdd, mmdd);
+    return normalizeSelectionsByCategory(filterByDateRangeForCategories(todayOutput || emptyCategorySelectionMap(), mmdd, mmdd));
   }
 );
 
-function emptyCategoryMap(): HistoricalEventsByCategory {
+function emptyHistoricalEventSelection(): GenerateHistoricalEventsOutput {
   return {
-    Sociology: [],
-    Technology: [],
-    Philosophy: [],
-    Science: [],
-    Politics: [],
-    Art: [],
-    Sports: [],
-    Literature: [],
+    count: 0,
+    events: [],
+  };
+}
+
+function emptyCategorySelectionMap(): HistoricalEventsByCategory {
+  return {
+    Sociology: emptyHistoricalEventSelection(),
+    Technology: emptyHistoricalEventSelection(),
+    Philosophy: emptyHistoricalEventSelection(),
+    Science: emptyHistoricalEventSelection(),
+    Politics: emptyHistoricalEventSelection(),
+    Art: emptyHistoricalEventSelection(),
+    Sports: emptyHistoricalEventSelection(),
+    Literature: emptyHistoricalEventSelection(),
   };
 }
 
@@ -464,14 +500,27 @@ function filterByDateRangeForCategories(
   endMM_DD: string
 ): HistoricalEventsByCategory {
   return {
-    Sociology: filterEventsByDateRange(eventsByCategory.Sociology || [], startMM_DD, endMM_DD),
-    Technology: filterEventsByDateRange(eventsByCategory.Technology || [], startMM_DD, endMM_DD),
-    Philosophy: filterEventsByDateRange(eventsByCategory.Philosophy || [], startMM_DD, endMM_DD),
-    Science: filterEventsByDateRange(eventsByCategory.Science || [], startMM_DD, endMM_DD),
-    Politics: filterEventsByDateRange(eventsByCategory.Politics || [], startMM_DD, endMM_DD),
-    Art: filterEventsByDateRange(eventsByCategory.Art || [], startMM_DD, endMM_DD),
-    Sports: filterEventsByDateRange(eventsByCategory.Sports || [], startMM_DD, endMM_DD),
-    Literature: filterEventsByDateRange(eventsByCategory.Literature || [], startMM_DD, endMM_DD),
+    Sociology: filterSelectionByDateRange(eventsByCategory.Sociology || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
+    Technology: filterSelectionByDateRange(eventsByCategory.Technology || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
+    Philosophy: filterSelectionByDateRange(eventsByCategory.Philosophy || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
+    Science: filterSelectionByDateRange(eventsByCategory.Science || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
+    Politics: filterSelectionByDateRange(eventsByCategory.Politics || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
+    Art: filterSelectionByDateRange(eventsByCategory.Art || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
+    Sports: filterSelectionByDateRange(eventsByCategory.Sports || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
+    Literature: filterSelectionByDateRange(eventsByCategory.Literature || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
+  };
+}
+
+function normalizeSelectionsByCategory(eventsByCategory: HistoricalEventsByCategory): HistoricalEventsByCategory {
+  return {
+    Sociology: normalizeSelection(eventsByCategory.Sociology || emptyHistoricalEventSelection()),
+    Technology: normalizeSelection(eventsByCategory.Technology || emptyHistoricalEventSelection()),
+    Philosophy: normalizeSelection(eventsByCategory.Philosophy || emptyHistoricalEventSelection()),
+    Science: normalizeSelection(eventsByCategory.Science || emptyHistoricalEventSelection()),
+    Politics: normalizeSelection(eventsByCategory.Politics || emptyHistoricalEventSelection()),
+    Art: normalizeSelection(eventsByCategory.Art || emptyHistoricalEventSelection()),
+    Sports: normalizeSelection(eventsByCategory.Sports || emptyHistoricalEventSelection()),
+    Literature: normalizeSelection(eventsByCategory.Literature || emptyHistoricalEventSelection()),
   };
 }
 

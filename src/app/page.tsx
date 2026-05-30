@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Icons } from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { generateHistoricalEvents } from "@/ai/flows/generate-historical-events";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
@@ -34,15 +33,22 @@ type HistoricalEvent = {
   date: string;
   description: string;
   category: string;
-  source: string; // Added source field
+  source: string;
+  significanceRank: number;
 };
 
-// Define CategoryEvents type which was missing
-type CategoryEvents = {
-  [category: string]: HistoricalEvent[];
+type HistoricalEventSelection = {
+  count: number;
+  events: HistoricalEvent[];
 };
 
-type HistoricalEventsByCategory = Record<HistoricalEventCategory, HistoricalEvent[]>;
+type HistoricalEventCategoryPayload = HistoricalEventSelection & {
+  visibleEvents: HistoricalEvent[];
+};
+
+type CategoryEvents = Partial<Record<HistoricalEventCategory, HistoricalEventCategoryPayload>>;
+
+type HistoricalEventsByCategory = Record<HistoricalEventCategory, HistoricalEventCategoryPayload>;
 
 type ClientCacheEntry<T> = {
   data: T;
@@ -51,7 +57,7 @@ type ClientCacheEntry<T> = {
 };
 
 const CLIENT_CACHE_PREFIX = "chronolens_client_events";
-const CLIENT_CACHE_VERSION = "v4";
+const CLIENT_CACHE_VERSION = "v6";
 const REPORTED_CONTENT_CACHE_KEY = "chronolens_reported_content_v1";
 const clientCacheMemory = new Map<string, ClientCacheEntry<unknown>>();
 const reportedContentMemory = new Set<string>();
@@ -150,8 +156,8 @@ function getClientCacheExpiration(viewType: 'today' | 'week'): number {
   return endOfWeek.getTime();
 }
 
-function hasAnyHistoricalEventsByCategory(eventsByCategory: HistoricalEventsByCategory): boolean {
-  return Object.values(eventsByCategory).some(events => Array.isArray(events) && events.length > 0);
+function hasAnyHistoricalEventsByCategory(eventsByCategory: Record<HistoricalEventCategory, HistoricalEventSelection>): boolean {
+  return Object.values(eventsByCategory).some(selection => Array.isArray(selection?.events) && selection.events.length > 0);
 }
 
 function getClientCache<T>(key: string): T | undefined {
@@ -281,12 +287,12 @@ const categoryBackgrounds = {
   Literature: "linear-gradient(135deg, #5f27cd 0%, #341f97 100%)",
 };
 
-async function getHistoricalEventsForCategory(category: string, isTodayView: boolean): Promise<{events: HistoricalEvent[], cached: boolean}> {
+async function getHistoricalEventsForCategory(category: string, isTodayView: boolean): Promise<{events: HistoricalEventCategoryPayload, cached: boolean}> {
   const viewType = isTodayView ? 'today' : 'week';
   const dateString = getRequestDateString();
   const clientCacheKey = getClientCacheKey('single', viewType, dateString, category);
 
-  const cachedClientData = getClientCache<HistoricalEvent[]>(clientCacheKey);
+  const cachedClientData = getClientCache<HistoricalEventCategoryPayload>(clientCacheKey);
   if (cachedClientData) {
     console.log(`${category} events served from client cache`);
     return {
@@ -312,18 +318,23 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
     // Log cache status for monitoring
     console.log(`${category} events ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
 
-    if (Array.isArray(result.data) && result.data.length > 0) {
-      setClientCache(clientCacheKey, result.data, viewType);
+    const payload: HistoricalEventCategoryPayload = {
+      ...(result.data || { count: 0, events: [] }),
+      visibleEvents: Array.isArray(result.visibleEvents) ? result.visibleEvents : [],
+    };
+
+    if (payload.events.length > 0) {
+      setClientCache(clientCacheKey, payload, viewType);
     }
     
     return {
-      events: result.data || [],
+      events: payload,
       cached: result.cached || false
     };
   } catch (error) {
     console.error(`Failed to fetch events for category: ${category}`, error);
     return {
-      events: [],
+      events: { count: 0, events: [], visibleEvents: [] },
       cached: false
     }; // Return empty events array on failure
   }
@@ -355,19 +366,26 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean): Promis
     throw new Error(result.error);
   }
 
-  const emptyEventsByCategory = HISTORICAL_EVENT_CATEGORIES.reduce((accumulator, category) => {
-    accumulator[category] = [];
+  const emptyEventsByCategory = HISTORICAL_EVENT_CATEGORIES.reduce((accumulator, currentCategory) => {
+    accumulator[currentCategory] = { count: 0, events: [], visibleEvents: [] };
     return accumulator;
   }, {} as HistoricalEventsByCategory);
 
   const eventsByCategory = {
     ...emptyEventsByCategory,
-    ...(result.dataByCategory || {}),
+    ...(Object.entries(result.dataByCategory || {}).reduce((accumulator, [currentCategory, selection]) => {
+      const visibleEvents = result.visibleEventsByCategory?.[currentCategory] || [];
+      accumulator[currentCategory as HistoricalEventCategory] = {
+        ...(selection as HistoricalEventSelection),
+        visibleEvents,
+      };
+      return accumulator;
+    }, {} as Partial<Record<HistoricalEventCategory, HistoricalEventCategoryPayload>>)),
   } as HistoricalEventsByCategory;
 
   console.log(`All categories ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
 
-  if (result.dataByCategory && hasAnyHistoricalEventsByCategory(eventsByCategory)) {
+  if (result.dataByCategory && hasAnyHistoricalEventsByCategory(result.dataByCategory)) {
     setClientCache(clientCacheKey, eventsByCategory, viewType);
   }
 
@@ -1074,7 +1092,7 @@ export default function Home() {
                                 {category}
                               </h2>
                               <p className="text-white/80 text-xs text-left">
-                                {loadingCategories[category] ? "Loading events..." : historicalEvents[category] ? `${historicalEvents[category].length} events` : "No events found"}
+                                {loadingCategories[category] ? "Loading events..." : historicalEvents[category] ? `${historicalEvents[category]?.count || 0} events` : "No events found"}
                               </p>
                             </div>
                           </div>
@@ -1107,9 +1125,9 @@ export default function Home() {
                               </div>
                             ))}
                           </div>
-                        ) : historicalEvents[category] && historicalEvents[category].length > 0 ? (
+                        ) : historicalEvents[category] && historicalEvents[category]!.visibleEvents.length > 0 ? (
                           <div className="space-y-3">
-                            {historicalEvents[category].map((event: any, index: number) => {
+                            {historicalEvents[category]!.visibleEvents.map((event: HistoricalEvent, index: number) => {
                               const reportKey = getEventReportKey(event);
                               const isReporting = reportingContent[reportKey] || false;
                               const isReported = reportedContent[reportKey] || false;
