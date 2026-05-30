@@ -158,6 +158,7 @@ export async function GET(request: NextRequest) {
     const date = searchParams.get('date');
     const category = searchParams.get('category');
     const viewType = searchParams.get('viewType');
+    const metadataOnly = searchParams.get('metadataOnly') === '1';
 
     const isBatchRequest = !category || category === 'all';
 
@@ -183,6 +184,32 @@ export async function GET(request: NextRequest) {
         { error: 'Invalid viewType. Must be "today" or "week"' },
         { status: 400 }
       );
+    }
+
+    if (metadataOnly) {
+      if (isBatchRequest) {
+        const cachedBatchData = await getCachedBatchResponse(date, viewType as 'today' | 'week');
+        return NextResponse.json({
+          cached: Boolean(cachedBatchData),
+          generationRequired: !cachedBatchData,
+          scope: 'batch',
+        });
+      }
+
+      const cacheKey: CacheKey = {
+        date,
+        category: category as HistoricalEventCategory,
+        viewType: viewType as 'today' | 'week',
+        version: CACHE_VERSION,
+      };
+      const key = generateCacheKey(cacheKey);
+      const cachedData = await getCachedSingleCategoryResponse(key);
+
+      return NextResponse.json({
+        cached: Boolean(cachedData),
+        generationRequired: !cachedData,
+        scope: 'single',
+      });
     }
 
     if (isBatchRequest) {

@@ -399,9 +399,7 @@ export default function Home() {
   const [isTodayView, setIsTodayView] = useState(true);
   const [historicalEvents, setHistoricalEvents] = useState<CategoryEvents>({});
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
-  const [showFirstVisitAnimation, setShowFirstVisitAnimation] = useState(false);
-  const [warmupPreviewEnabled, setWarmupPreviewEnabled] = useState(false);
-  const [warmupPreviewReady, setWarmupPreviewReady] = useState(process.env.NODE_ENV === "production");
+  const [showGeminiWarmup, setShowGeminiWarmup] = useState(false);
   const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
   const [reportingContent, setReportingContent] = useState<Record<string, boolean>>({});
@@ -412,17 +410,8 @@ export default function Home() {
   const baseHeaderShrunken = useHeaderShrink(100);
   const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
   const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const initialLoadTimerRef = useRef<number | null>(null);
   const [warmupCategoryIndex, setWarmupCategoryIndex] = useState(0);
-  const hasShownFirstVisitAnimationRef = useRef(false);
   const { toast } = useToast();
-
-  const clearInitialLoadTimer = () => {
-    if (initialLoadTimerRef.current !== null && typeof window !== "undefined") {
-      window.clearTimeout(initialLoadTimerRef.current);
-      initialLoadTimerRef.current = null;
-    }
-  };
 
   // Handle accordion value changes and smooth scroll
   const handleAccordionChange = (value: string[]) => {
@@ -470,25 +459,6 @@ export default function Home() {
   }, [isTodayView]);
 
   useEffect(() => {
-    if (typeof window === "undefined" || process.env.NODE_ENV === "production") {
-      setWarmupPreviewReady(true);
-      return;
-    }
-
-    const searchParams = new URLSearchParams(window.location.search);
-    const queryValue = searchParams.get("warmupPreview");
-
-    if (queryValue === "1") {
-      setWarmupPreviewEnabled(true);
-      setWarmupPreviewReady(true);
-      return;
-    }
-
-    setWarmupPreviewEnabled(false);
-    setWarmupPreviewReady(true);
-  }, []);
-
-  useEffect(() => {
     const keys = loadReportedContentKeys();
     const reportedMap = Array.from(keys).reduce((accumulator, key) => {
       accumulator[key] = true;
@@ -498,13 +468,7 @@ export default function Home() {
     setReportedContent(reportedMap);
   }, []);
 
-  useEffect(() => {
-    return () => {
-      clearInitialLoadTimer();
-    };
-  }, []);
-
-  const shouldShowWarmupBanner = isTodayView && (showFirstVisitAnimation || warmupPreviewEnabled);
+  const shouldShowWarmupBanner = showGeminiWarmup;
 
   useEffect(() => {
     if (!shouldShowWarmupBanner) {
@@ -543,22 +507,24 @@ export default function Home() {
 
   const fetchAllEvents = async () => {
     const viewType = isTodayView ? 'today' : 'week';
-    const shouldShowWarmupAnimation = viewType === 'today';
-    const shouldForceWarmupPreview = process.env.NODE_ENV !== "production" && warmupPreviewEnabled && isTodayView;
-    let shouldShowFirstVisitAnimation = false;
+    const dateString = getRequestDateString();
+    const clientCacheKey = getClientCacheKey('batch', viewType, dateString);
+    const hasClientCache = Boolean(getClientCache<HistoricalEventsByCategory>(clientCacheKey));
 
-    if (shouldForceWarmupPreview) {
-      hasShownFirstVisitAnimationRef.current = true;
-      shouldShowFirstVisitAnimation = true;
-      clearInitialLoadTimer();
-      setShowFirstVisitAnimation(true);
-    } else if (shouldShowWarmupAnimation && !hasShownFirstVisitAnimationRef.current) {
-      hasShownFirstVisitAnimationRef.current = true;
-      shouldShowFirstVisitAnimation = true;
-      clearInitialLoadTimer();
-      initialLoadTimerRef.current = window.setTimeout(() => {
-        setShowFirstVisitAnimation(true);
-      }, 350);
+    setShowGeminiWarmup(false);
+
+    if (!hasClientCache) {
+      try {
+        const metadataResponse = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}&metadataOnly=1`);
+        if (metadataResponse.ok) {
+          const metadata = await metadataResponse.json();
+          if (metadata?.generationRequired === true) {
+            setShowGeminiWarmup(true);
+          }
+        }
+      } catch (metadataError) {
+        console.warn('Failed to probe cache status before historical event fetch:', metadataError);
+      }
     }
 
     // Initialize loading state for all categories
@@ -588,10 +554,7 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to fetch all categories', error);
     } finally {
-      if (!shouldForceWarmupPreview && shouldShowFirstVisitAnimation) {
-        clearInitialLoadTimer();
-        setShowFirstVisitAnimation(false);
-      }
+      setShowGeminiWarmup(false);
 
       setLoadingCategories(
         categories.reduce((accumulator, category) => {
@@ -603,12 +566,8 @@ export default function Home() {
   };
 
   useEffect(() => {
-    if (!warmupPreviewReady) {
-      return;
-    }
-
     fetchAllEvents();
-  }, [isTodayView, warmupPreviewReady]);
+  }, [isTodayView]);
 
   const toggleView = () => {
     setIsTodayView(!isTodayView);
@@ -1019,10 +978,10 @@ export default function Home() {
                       One-time warmup
                     </div>
                     <h2 className="text-2xl font-bold tracking-tight text-slate-950 drop-shadow-[0_1px_0_rgba(255,255,255,0.55)] dark:text-white md:text-4xl">
-                      Brewing the first chronicle
+                      Curating fresh historical selections
                     </h2>
                     <p className="text-balance text-sm leading-6 text-slate-800 dark:text-white/75 md:text-base">
-                      Welcome to ChronoLens. We’re preparing your first curated set of events.
+                      Gemini is generating a fresh ranked set of events for this view.
                     </p>
                   </div>
 
