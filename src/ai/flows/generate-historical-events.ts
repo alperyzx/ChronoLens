@@ -141,7 +141,7 @@ function normalizeSelection(selection: GenerateHistoricalEventsOutput): Generate
   const rankedEvents = [...selection.events]
     .map((event, index) => ({
       ...event,
-      significanceRank: event.significanceRank ?? index + 1,
+      significanceRank: event.significanceRank > 0 ? event.significanceRank : index + 1,
     }))
     .sort((left, right) => left.significanceRank - right.significanceRank);
 
@@ -168,7 +168,7 @@ const HistoricalEventSchema = z.object({
   description: z.string().describe('A description of the historical event (50-100 words).'),
   category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of the historical event.'),
   source: z.string().describe('URL to a reputable source verifying this historical event.'),
-  significanceRank: z.coerce.number().int().positive().optional().describe('A 1-based ranking where 1 is the most significant event.'),
+  significanceRank: z.coerce.number().int().positive().catch(0).describe('A 1-based ranking where 1 is the most significant event.'),
 });
 
 const HistoricalEventSelectionSchema = z.object({
