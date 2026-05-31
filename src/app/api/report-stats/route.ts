@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getReportStats, getAllReportedContent, clearAllReports, recoverReportedContent } from '@/lib/report-cache';
+import { getReportStats, getAllReportedContent, clearAllReports, recoverReportedContent, isContentHidden } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES } from '@/lib/historical-event-categories';
 
 export async function GET(request: NextRequest) {
@@ -70,6 +70,14 @@ export async function PATCH(request: NextRequest) {
 
     const recovered = await recoverReportedContent(title, category, date);
     if (!recovered) {
+      const stillHidden = await isContentHidden(title, category, date);
+      if (!stillHidden) {
+        return NextResponse.json({
+          success: true,
+          message: 'Reported content is already visible',
+        });
+      }
+
       return NextResponse.json(
         { error: 'Reported content not found' },
         { status: 404 }
