@@ -1,212 +1,97 @@
 # Cache Implementation for ChronoLens
 
 ## Overview
-Implemented a **persistent file-based cache system** to minimize Gemini API requests and improve performance for all users. This solution **fixes the Google Cloud server restart issue** where the in-memory cache was reset.
+ChronoLens uses a layered cache so historical events are fast to load and durable across restarts. Event data is cached on the server and persisted in MongoDB, while the browser keeps a short-lived local cache for repeat views in the same session.
 
-## Problem Solved
-- **Google Cloud Server Restarts**: Low traffic causes servers to spin down/restart, resetting in-memory cache
-- **Cache Persistence**: File-based cache survives server restarts
-- **Performance**: Maintains fast response times even after server restarts
+MongoDB is the durable source of truth for both historical event selections and report state. The backend decides whether browser caches are still valid, and the frontend only revalidates when the backend revision changes.
 
-## Architecture
+The backend is deployed through Firebase, even though the runtime executes on Google Cloud infrastructure.
 
-### Before (In-memory caching)
-- Used node-cache for in-memory storage
-- Cache reset on every server restart
-- Lost all cached data when Google Cloud spun down servers
-- Required fresh API calls after restarts
+## What Is Cached
 
-### After (File-based caching)
-- **Persistent file-based cache** using filesystem
-- **Survives server restarts** and deployments
-- Automatic cleanup of expired cache files
-- Graceful degradation if cache operations fail
+### Historical Events
+- Cached per view and category in the server cache layer
+- Stored as selection objects with `count`, `events`, and visible slices
+- Used for both Today and This Week views
 
-## Implementation Details
+### Report State
+- Cached separately from event selections
+- Tracks report counts and hidden status for moderation
+- Used by the admin console, visibility filtering, and cache-revision checks
 
-### 1. Cache Service (`src/lib/cache.ts` & `src/lib/cache-file.ts`)
-- **Persistent Storage**: Files stored in system temp directory or custom `CACHE_DIR`
-- **Adaptive TTL Strategy**: 
-  - **Today view**: Cache expires at midnight (daily refresh)
-  - **Week view**: Cache expires at end of week/Sunday (weekly refresh)
-- **Key Format**: `chronolens_events_[viewType]_[category]_[date]`
-- **File Format**: JSON files with data, expiration timestamp, and metadata
-- **Statistics**: Tracks cache size, expired files, and storage usage
-- **Expiration Info**: Provides detailed cache expiration times for monitoring
-- **Auto-cleanup**: Expired files are automatically removed
+## Cache Layers
 
-### 2. Cache Strategies Available
+### 1. Browser Cache
+- Location: `src/app/page.tsx`
+- Storage: `localStorage` plus in-memory fallback
+- Purpose: avoid repeat fetches in the same browser session
+- Invalidation: browser cache is tied to a backend report-cache revision
 
-#### Instance Memory Cache
-- **Location**: `src/lib/cache.ts`
-- **Persistence**: Per-process only
-- **Storage**: In-memory map
-- **Benefits**: Fastest lookup path, avoids repeated remote reads within the same server process
+### 2. Server Cache
+- Location: `src/lib/cache.ts`
+- Storage: process memory with persistent backing
+- Purpose: avoid repeated remote reads within the same server process
 
-#### Firestore-Backed Cache
-- **Location**: `src/lib/cache-mongo.ts`
-- **Persistence**: Shared remote cache
-- **Storage**: Firestore-compatible Mongo endpoint
-- **Benefits**: Survives restarts and is shared across instances
+### 3. MongoDB Persistence
+- Location: `src/lib/cache-mongo.ts`
+- Purpose: durable persistence for historical events and report state
+- Behavior: survives restarts and shared across instances
 
-#### Legacy File Cache Fallback
-- **Location**: `src/lib/cache-file.ts`
-- **Persistence**: Survives server restarts on the same machine
-- **Storage**: Filesystem-based JSON files
-- **Benefits**: Safe fallback if Firestore is unavailable
+### 4. Legacy File Fallback
+- Location: `src/lib/cache-file.ts`
+- Purpose: fallback when MongoDB is unavailable or disabled
+- Behavior: survives restarts on the same machine
 
-### 3. API Routes (Updated for Async)
-- **`/api/historical-events`**: Main endpoint with async cache operations
-- **`/api/cache-stats`**: Basic admin endpoint + cleanup function (POST)
-- **`/api/cache-stats-enhanced`**: Enhanced admin endpoint with cleanup (POST)
+## Event Read Flow
 
-### 4. Client Updates
-- No changes required on client side
-- API interface remains the same
-- Cache operations are transparent to frontend
+### Cache Hit Path
+1. The browser checks its local cache first.
+2. If the client cache is missing or stale, it calls `/api/historical-events`.
+3. The server checks memory and persistent cache before any Gemini call.
+4. If a valid cached selection exists, the server returns it immediately.
 
-### 5. Admin Interface (`/content-admin`)
-- **Enhanced Statistics**: File count, storage size, expired files
-- **Cleanup Function**: Remove only expired cache files
-- **Clear All**: Complete cache reset
-- **Real-time Monitoring**: Updated cache information display
+### Cache Miss Path
+1. The server finds no valid cached selection.
+2. The route calls Gemini to generate fresh category data.
+3. The new selection is written back to server cache and MongoDB.
+4. The response includes visible events plus a cache revision.
 
-### Cache Behavior
+## Report and Visibility Flow
 
-### Cache Hit
-1. User requests historical events
-2. Server checks instance memory first
-3. If memory is empty, the server checks Firestore
-4. If Firestore misses, the request falls through to Gemini
-5. Response includes `cached: true` when served from cache
+### Reported Content
+- Reporting an item writes report state to MongoDB
+- When the threshold is reached, the item becomes hidden server-side
+- The admin recovery flow removes that report record and returns success even if the item is already visible
 
-### Cache Miss (Fresh Data)
-1. User requests historical events
-2. Server finds no valid cache entry in memory or Firestore
-3. Makes fresh Gemini AI API call
-4. Stores the response in memory and Firestore
-5. Returns fresh data with `cached: false` flag
+### Hidden Content Updates
+- The historical-events route filters hidden items using the report cache
+- The frontend keeps a separate hidden-content key set for optimistic UI updates
+- The frontend also stores a report-cache revision so stale browser caches can be invalidated without extra event generation
 
-## Configuration
+## API Routes
 
-### Environment Variables
+- `/api/historical-events`: serves cached or freshly generated events, plus visible slices and a report-cache revision
+- `/api/report-content`: increments report counts and determines whether content is hidden
+- `/api/report-stats`: admin stats, list, clear, and recover operations for report state
+- `/api/cache-stats`: cache admin operations
+- `/api/cache-stats-enhanced`: detailed cache stats and cleanup
+
+## Environment Variables
+
 ```bash
-# Firestore-compatible cache backend
-MONGO_CREDENTIALS=mongodb://.../dbchronolens?retryWrites=false
+MONGO_CREDENTIALS=mongodb://.../chronolens?retryWrites=false
+CACHE_DIR=/custom/cache/path
+GOOGLE_GENAI_API_KEY=...
 ```
 
-### Cache Directory
-- **Default**: System temp directory (`os.tmpdir()`)
-- **Custom**: Set `CACHE_DIR` environment variable if you want the legacy file fallback to survive restarts
+## Important Notes
 
-## Benefits
+- MongoDB is used for durable persistence of events and report state, not for every browser render.
+- The frontend does not need to refetch events after every report; it can hide the item locally and rely on the backend revision check for stale cache invalidation.
+- If the backend report revision has not changed, the browser cache can be reused safely.
 
-### Persistence & Reliability
-- **Server Restart Resilience**: Cache survives Google Cloud server restarts
-- **Deployment Stability**: Cache persists through application deployments
-- **Data Consistency**: Shared cache across all application instances
+## Missing Or Outdated Items To Watch
 
-### Performance
-- **Faster Response Times**: Cached responses from disk are still very fast
-- **Reduced Latency**: No AI API calls for cached data
-- **Better User Experience**: Consistent performance after restarts
-
-### Cost Optimization
-- **Minimized API Calls**: 
-  - **Today view**: Maximum 6 API calls per day (one per category)
-  - **Week view**: Maximum 6 API calls per week (one per category)
-- **Persistent Savings**: API call reduction maintained across restarts
-- **Efficient Resource Usage**: Disk-based storage with automatic cleanup
-
-### Scalability
-- **Multi-instance Support**: Shared file cache across server instances
-- **Storage Efficient**: Automatic cleanup of expired files
-- **Configurable**: Flexible storage location and management
-
-## Monitoring & Management
-
-### Enhanced Cache Statistics
-- **Valid Keys**: Number of active cache entries
-- **Expired Files**: Number of expired cache files awaiting cleanup
-- **Storage Size**: Total cache storage usage in MB
-- **Hit Rate**: Cache performance metrics
-
-### Admin Dashboard Features
-- **Real-time Statistics**: Updated cache information with file metrics
-- **Selective Cleanup**: Remove only expired files while keeping valid cache
-- **Complete Reset**: Clear all cache files for fresh start
-- **Storage Monitoring**: Track cache size and file count
-- **Expiration Tracking**: Monitor cache expiration schedules
-
-### Maintenance Operations
-- **Automatic Cleanup**: Expired files removed during normal operations
-- **Manual Cleanup**: Admin interface provides cleanup button
-- **Cache Reset**: Complete cache clearing for troubleshooting
-- **Storage Management**: Monitor and manage cache storage usage
-
-## Troubleshooting
-
-### Cache Issues
-- **File Permissions**: Ensure write access to cache directory
-- **Storage Space**: Monitor available disk space for cache files
-- **Directory Access**: Verify `CACHE_DIR` is accessible if custom path used
-
-### Performance
-- **Disk I/O**: File cache has minimal disk I/O overhead
-- **Storage Location**: Use fast storage for cache directory if possible
-- **Cleanup Frequency**: Regular cleanup prevents storage bloat
-
-This implementation solves the **Google Cloud server restart cache reset problem** while maintaining excellent performance and API cost optimization.
-- TTL tracking for today vs week views
-
-## Configuration
-
-### TTL Calculation
-```typescript
-// Today view - Cache expires at midnight
-const tomorrow = new Date(now);
-tomorrow.setDate(now.getDate() + 1);
-tomorrow.setHours(0, 0, 0, 0);
-const ttlMs = tomorrow.getTime() - now.getTime();
-
-// Week view - Cache expires at end of week (Sunday)
-const endOfWeek = new Date(now);
-const currentDay = now.getDay();
-const daysUntilSunday = currentDay === 0 ? 7 : 7 - currentDay;
-endOfWeek.setDate(now.getDate() + daysUntilSunday);
-endOfWeek.setHours(0, 0, 0, 0);
-const ttlMs = endOfWeek.getTime() - now.getTime();
-```
-
-### Cache Key Generation
-```typescript
-// Format: events_[today|week]_[category]_[YYYY-MM-DD]
-const key = `events_${viewType}_${category}_${date}`;
-```
-
-## Usage
-
-### For Developers
-1. **Development**: Content admin available at `/content-admin`
-2. **Monitoring**: Check cache performance via API or admin panel
-3. **Debugging**: Console logs show cache hit/miss status
-
-### For Users
-- **Transparent**: No user action required
-- **Visual Feedback**: "Cached" badge shows when data is from cache
-- **Performance**: Faster loading after first daily request
-
-## Future Enhancements
-
-### Possible Improvements
-1. **Persistent Storage**: Redis or database-backed cache
-2. **Cache Warming**: Pre-populate cache for popular categories
-3. **Smart Invalidation**: Refresh specific categories on demand
-4. **Distributed Cache**: Multi-server cache coordination
-5. **Cache Analytics**: Detailed usage patterns and optimization
-
-### Monitoring Enhancements
-1. **Alerting**: Low hit rate notifications
-2. **Metrics Export**: Prometheus/Grafana integration
-3. **Cache Health**: Memory usage and performance tracking
-4. **Historical Data**: Cache performance over time
+- The old Firestore wording in earlier drafts is outdated and should not be used.
+- The cache order should be described as browser cache -> server cache -> MongoDB -> Gemini, with file fallback only when needed.
+- Any docs that say the client has no caching need to be updated; the client now persists view state and hidden/report state in localStorage.

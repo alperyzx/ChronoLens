@@ -8,6 +8,7 @@
 - Event Display: Display historical events in collapsible cards, grouped by category, showing the title, date, and description. Apply CSS fade-in animations for card expansion.
 - View Toggle: Include a toggle switch for "Today" (historical events for the current date in past years) vs. "This Week" (historical events for the current ISO week in past years) views. Persist the toggle state in localStorage.
 - Night Mode: Implement a night mode feature that switches on and off based on the user's system default settings.
+- Moderation Flow: Store report counts and hidden state in MongoDB, keep recovered items idempotent, and let the backend decide when browser caches must be invalidated.
 
 ## Style Guidelines:
 
@@ -29,7 +30,7 @@
 ## Original User Request:
 Today in History Project Specification
 Project Overview
-"Today in History" is a web application that displays historical events from past years for the current day or ISO week, categorized into Sociology, Technology, Philosophy, Science, Politics, and Art. Events are sourced from the Gemini API and represent significant moments from history, not current-day or current-week occurrences. The app uses Firebase for hosting, authentication, and caching. Each category features a unique SVG background embedded in CSS. A toggle switch allows switching between "Today" (historical events for the current date in past years) and "This Week" (historical events for the current ISO week in past years) views, with caching to optimize API usage. Events are validated to ensure they are historical and match the selected period.
+"Today in History" is a web application that displays historical events from past years for the current day or ISO week, categorized into Sociology, Technology, Philosophy, Science, Politics, and Art. Events are sourced from the Gemini API and represent significant moments from history, not current-day or current-week occurrences. The app uses MongoDB-backed persistence and cache layers for events and moderation state. Each category features a unique SVG background embedded in CSS. A toggle switch allows switching between "Today" (historical events for the current date in past years) and "This Week" (historical events for the current ISO week in past years) views, with caching to optimize API usage. Events are validated to ensure they are historical and match the selected period.
 Functional Requirements
 Event Retrieval and Categorization
 
@@ -105,14 +106,14 @@ Ensure SVGs are responsive (background-size: cover) and provide contrast for tex
 
 Caching and Performance
 
-Firebase Firestore Caching:
-Cache validated historical events in events/{date}/{category} (daily) or events/week/{weekNumber}/{category} (weekly).
-Store week metadata (startDate, endDate).
-Cache expiration: 24 hours (daily), 7 days (weekly).
+MongoDB Caching:
+Cache validated historical events in persistent server storage, keyed by view, category, and normalized date/week bucket.
+Store week metadata and report-state metadata so the backend can invalidate stale browser cache entries when moderation state changes.
+Cache expiration: 24 hours (daily), 7 days (weekly), with backend-driven invalidation for moderation changes.
 
 
 Client-Side Caching:
-Use localStorage for validated historical events with timestamp and week range.
+Use localStorage for validated historical events with timestamp and revision metadata.
 Validate cached events’ dates to ensure they are historical and match the period.
 
 
@@ -131,7 +132,7 @@ Persist toggle state in localStorage.
 
 Gemini API Integration
 
-Store API keys in Firebase environment variables.
+Store API keys in environment variables.
 API request: Include date or week, category, prompt (emphasizing historical events).
 Response: JSON with title, date, description, category.
 Validate and filter responses to exclude current-year events before caching/displaying.
