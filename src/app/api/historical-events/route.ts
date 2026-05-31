@@ -13,6 +13,7 @@ import {
 } from '@/lib/cache';
 import { normalizeCacheDate } from '@/lib/cache-keys';
 import { filterHiddenContent } from '@/lib/report-cache';
+import { getReportStats } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from '@/lib/historical-event-categories';
 
 const CACHE_VERSION = 'v6';
@@ -22,6 +23,15 @@ const GENERATION_LOCK_POLL_MS = 1000;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function buildReportCacheRevision(stats: Awaited<ReturnType<typeof getReportStats>>): string {
+  return [
+    stats.lastClearYear,
+    stats.lastClearWeek,
+    stats.totalReported,
+    stats.hiddenContent,
+  ].join(':');
 }
 
 function isEmptySelection(selection?: CachedHistoricalEventSelection | null): boolean {
@@ -187,11 +197,15 @@ export async function GET(request: NextRequest) {
     }
 
     if (metadataOnly) {
+      const reportStats = await getReportStats();
+      const reportCacheRevision = buildReportCacheRevision(reportStats);
+
       if (isBatchRequest) {
         const cachedBatchData = await getCachedBatchResponse(date, viewType as 'today' | 'week');
         return NextResponse.json({
           cached: Boolean(cachedBatchData),
           generationRequired: !cachedBatchData,
+          reportCacheRevision,
           scope: 'batch',
         });
       }
@@ -208,6 +222,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         cached: Boolean(cachedData),
         generationRequired: !cachedData,
+        reportCacheRevision,
         scope: 'single',
       });
     }
@@ -222,6 +237,7 @@ export async function GET(request: NextRequest) {
           dataByCategory: cachedBatchData,
           visibleEventsByCategory,
           cached: true,
+          reportCacheRevision: buildReportCacheRevision(await getReportStats()),
           timestamp: new Date().toISOString()
         });
       }
@@ -302,6 +318,7 @@ export async function GET(request: NextRequest) {
         data: cachedData,
         visibleEvents,
         cached: true,
+        reportCacheRevision: buildReportCacheRevision(await getReportStats()),
         timestamp: new Date().toISOString()
       });
     }
@@ -344,6 +361,7 @@ export async function GET(request: NextRequest) {
       data: events,
       visibleEvents,
       cached,
+      reportCacheRevision: buildReportCacheRevision(await getReportStats()),
       timestamp: new Date().toISOString()
     });
 

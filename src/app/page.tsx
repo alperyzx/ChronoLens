@@ -54,13 +54,16 @@ type ClientCacheEntry<T> = {
   data: T;
   createdAt: number;
   expiresAt: number;
+  revision?: string;
 };
 
 const CLIENT_CACHE_PREFIX = "chronolens_client_events";
 const CLIENT_CACHE_VERSION = "v6";
 const REPORTED_CONTENT_CACHE_KEY = "chronolens_reported_content_v1";
+const HIDDEN_CONTENT_CACHE_KEY = "chronolens_hidden_content_v1";
 const clientCacheMemory = new Map<string, ClientCacheEntry<unknown>>();
 const reportedContentMemory = new Set<string>();
+const hiddenContentMemory = new Set<string>();
 
 function getEventReportKey(event: Pick<HistoricalEvent, 'title' | 'category' | 'date'>): string {
   return `${event.title}::${event.category}::${event.date}`;
@@ -126,6 +129,60 @@ function markEventAsReported(reportKey: string): void {
   const keys = loadReportedContentKeys();
   keys.add(reportKey);
   persistReportedContentKeys(keys);
+}
+
+function loadHiddenContentKeys(): Set<string> {
+  if (hiddenContentMemory.size > 0) {
+    return new Set(hiddenContentMemory);
+  }
+
+  if (typeof window === "undefined") {
+    return new Set();
+  }
+
+  try {
+    const raw = window.localStorage.getItem(HIDDEN_CONTENT_CACHE_KEY);
+    if (!raw) {
+      return new Set();
+    }
+
+    const parsed = JSON.parse(raw) as string[];
+    if (!Array.isArray(parsed)) {
+      return new Set();
+    }
+
+    const keys = new Set(parsed);
+    for (const key of keys) {
+      hiddenContentMemory.add(key);
+    }
+
+    return keys;
+  } catch {
+    return new Set();
+  }
+}
+
+function persistHiddenContentKeys(keys: Set<string>): void {
+  hiddenContentMemory.clear();
+  for (const key of keys) {
+    hiddenContentMemory.add(key);
+  }
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(HIDDEN_CONTENT_CACHE_KEY, JSON.stringify(Array.from(keys)));
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
+function markEventAsHidden(reportKey: string): void {
+  const keys = loadHiddenContentKeys();
+  keys.add(reportKey);
+  persistHiddenContentKeys(keys);
 }
 
 function getRequestDateString(): string {
@@ -206,11 +263,12 @@ function getClientCache<T>(key: string): T | undefined {
   }
 }
 
-function setClientCache<T>(key: string, data: T, viewType: 'today' | 'week'): void {
+function setClientCache<T>(key: string, data: T, viewType: 'today' | 'week', revision?: string): void {
   const entry: ClientCacheEntry<T> = {
     data,
     createdAt: Date.now(),
     expiresAt: getClientCacheExpiration(viewType),
+    revision,
   };
 
   clientCacheMemory.set(key, entry);
@@ -223,6 +281,30 @@ function setClientCache<T>(key: string, data: T, viewType: 'today' | 'week'): vo
     window.localStorage.setItem(key, JSON.stringify(entry));
   } catch {
     // Ignore storage quota / privacy mode failures.
+  }
+}
+
+async function getReportCacheRevision(date: string, viewType: 'today' | 'week', category?: string): Promise<string | undefined> {
+  const params = new URLSearchParams({
+    date,
+    viewType,
+    metadataOnly: '1',
+  });
+
+  if (category) {
+    params.set('category', category);
+  }
+
+  try {
+    const response = await fetch(`/api/historical-events?${params.toString()}`);
+    if (!response.ok) {
+      return undefined;
+    }
+
+    const payload = await response.json() as { reportCacheRevision?: string };
+    return payload.reportCacheRevision;
+  } catch {
+    return undefined;
   }
 }
 
@@ -291,14 +373,23 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
   const viewType = isTodayView ? 'today' : 'week';
   const dateString = getRequestDateString();
   const clientCacheKey = getClientCacheKey('single', viewType, dateString, category);
+  const reportCacheRevision = await getReportCacheRevision(dateString, viewType, category);
 
   const cachedClientData = getClientCache<HistoricalEventCategoryPayload>(clientCacheKey);
   if (cachedClientData) {
+    const memoryEntry = clientCacheMemory.get(clientCacheKey);
+    if (!reportCacheRevision || memoryEntry?.revision === reportCacheRevision) {
     console.log(`${category} events served from client cache`);
     return {
       events: cachedClientData,
       cached: true,
     };
+    }
+
+    clientCacheMemory.delete(clientCacheKey);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(clientCacheKey);
+    }
   }
   
   try {
@@ -324,7 +415,7 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
     };
 
     if (payload.events.length > 0) {
-      setClientCache(clientCacheKey, payload, viewType);
+      setClientCache(clientCacheKey, payload, viewType, result.reportCacheRevision);
     }
     
     return {
@@ -344,14 +435,23 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean): Promis
   const viewType = isTodayView ? 'today' : 'week';
   const dateString = getRequestDateString();
   const clientCacheKey = getClientCacheKey('batch', viewType, dateString);
+  const reportCacheRevision = await getReportCacheRevision(dateString, viewType);
 
   const cachedClientData = getClientCache<HistoricalEventsByCategory>(clientCacheKey);
   if (cachedClientData) {
+    const memoryEntry = clientCacheMemory.get(clientCacheKey);
+    if (!reportCacheRevision || memoryEntry?.revision === reportCacheRevision) {
     console.log(`All categories served from client cache`);
     return {
       eventsByCategory: cachedClientData,
       cached: true,
     };
+    }
+
+    clientCacheMemory.delete(clientCacheKey);
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(clientCacheKey);
+    }
   }
 
   const response = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}`);
@@ -386,7 +486,7 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean): Promis
   console.log(`All categories ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
 
   if (result.dataByCategory && hasAnyHistoricalEventsByCategory(result.dataByCategory)) {
-    setClientCache(clientCacheKey, eventsByCategory, viewType);
+    setClientCache(clientCacheKey, eventsByCategory, viewType, result.reportCacheRevision);
   }
 
   return {
@@ -404,6 +504,7 @@ export default function Home() {
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
   const [reportingContent, setReportingContent] = useState<Record<string, boolean>>({});
   const [reportedContent, setReportedContent] = useState<Record<string, boolean>>({});
+  const [hiddenContent, setHiddenContent] = useState<Record<string, boolean>>({});
   const [confirmReportEvent, setConfirmReportEvent] = useState<HistoricalEvent | null>(null);
   const categories = HISTORICAL_EVENT_CATEGORIES;
   // Use a simpler logic: expand header when all accordions are closed
@@ -468,7 +569,35 @@ export default function Home() {
     setReportedContent(reportedMap);
   }, []);
 
+  useEffect(() => {
+    const keys = loadHiddenContentKeys();
+    const hiddenMap = Array.from(keys).reduce((accumulator, key) => {
+      accumulator[key] = true;
+      return accumulator;
+    }, {} as Record<string, boolean>);
+
+    hiddenContentMemory.clear();
+    for (const key of keys) {
+      hiddenContentMemory.add(key);
+    }
+
+    setHiddenContent(hiddenMap);
+  }, []);
+
   const shouldShowWarmupBanner = showGeminiWarmup;
+
+  const getRenderableEvents = (selection?: HistoricalEventCategoryPayload): HistoricalEvent[] => {
+    if (!selection) {
+      return [];
+    }
+
+    const hiddenKeys = new Set(Object.keys(hiddenContent).filter(key => hiddenContent[key]));
+    const sourceEvents = Array.isArray(selection.visibleEvents) && selection.visibleEvents.length > 0
+      ? selection.visibleEvents
+      : selection.events.slice(0, selection.count);
+
+    return sourceEvents.filter(event => !hiddenKeys.has(getEventReportKey(event)));
+  };
 
   useEffect(() => {
     if (!shouldShowWarmupBanner) {
@@ -734,9 +863,9 @@ export default function Home() {
           variant: result.isHidden ? "destructive" : "default",
         });
         
-        // If content is now hidden, refresh the category events
         if (result.isHidden) {
-          await fetchCategoryEvents(event.category);
+          markEventAsHidden(reportKey);
+          setHiddenContent(prev => ({ ...prev, [reportKey]: true }));
         }
       } else {
         toast({
@@ -1084,9 +1213,9 @@ export default function Home() {
                               </div>
                             ))}
                           </div>
-                        ) : historicalEvents[category] && historicalEvents[category]!.visibleEvents.length > 0 ? (
+                        ) : getRenderableEvents(historicalEvents[category]).length > 0 ? (
                           <div className="space-y-3">
-                            {historicalEvents[category]!.visibleEvents.map((event: HistoricalEvent, index: number) => {
+                            {getRenderableEvents(historicalEvents[category]).map((event: HistoricalEvent, index: number) => {
                               const reportKey = getEventReportKey(event);
                               const isReporting = reportingContent[reportKey] || false;
                               const isReported = reportedContent[reportKey] || false;
