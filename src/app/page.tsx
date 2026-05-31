@@ -8,9 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Toaster } from "@/components/ui/toaster";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Navigation, Footer } from "@/components/navigation";
+import { Footer } from "@/components/navigation";
 import { useHeaderShrink } from "@/hooks/use-header-shrink";
 import { useToast } from "@/hooks/use-toast";
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from "@/lib/historical-event-categories";
@@ -895,9 +894,6 @@ export default function Home() {
           : "bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 dark:from-slate-900 dark:via-amber-950/40 dark:to-rose-950/40"
       )}
     >
-      <Navigation />
-      
-      
       {/* Modern animated background */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
         <div
@@ -1332,7 +1328,6 @@ export default function Home() {
         </div>
       </div>
       <Footer />
-      <Toaster />
       
       {/* Report Confirmation Dialog */}
       <AlertDialog open={!!confirmReportEvent} onOpenChange={(open) => !open && setConfirmReportEvent(null)}>
