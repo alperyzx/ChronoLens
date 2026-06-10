@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { generateHistoricalEvents, generateHistoricalEventsByCategory, type HistoricalEventsByCategory } from '@/ai/flows/generate-historical-events';
 import { 
   acquireCacheLock,
@@ -20,6 +20,8 @@ const CACHE_VERSION = 'v6';
 const GENERATION_LOCK_TTL_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_WAIT_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_POLL_MS = 1000;
+
+export const maxDuration = 300;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -162,6 +164,17 @@ async function runLockedGeneration<T>(options: {
   throw new Error('Timed out waiting for historical events generation lock');
 }
 
+function keepGenerationAlive<T>(promise: Promise<T>): Promise<T> {
+  after(
+    promise.catch(error => {
+      console.error('Historical events background generation failed:', error);
+      throw error;
+    })
+  );
+
+  return promise;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -256,39 +269,43 @@ export async function GET(request: NextRequest) {
       }
 
       const lockKey = getGenerationLockKey(date, viewType as 'today' | 'week', 'batch');
-      const { data: eventsByCategory, cached } = await runLockedGeneration<HistoricalEventsByCategory>({
-        lockKey,
-        readCachedData: async () => getCachedBatchResponse(date, viewType as 'today' | 'week'),
-        generateFreshData: async () => {
-          const generatedEvents = await generateHistoricalEventsByCategory({
-            date: viewType === 'week' ? 'This Week' : date,
-            category: 'Sociology'
-          });
+      const generationPromise = keepGenerationAlive(
+        runLockedGeneration<HistoricalEventsByCategory>({
+          lockKey,
+          readCachedData: async () => getCachedBatchResponse(date, viewType as 'today' | 'week'),
+          generateFreshData: async () => {
+            const generatedEvents = await generateHistoricalEventsByCategory({
+              date: viewType === 'week' ? 'This Week' : date,
+              category: 'Sociology'
+            });
 
-          return generatedEvents;
-        },
-        storeFreshData: async generatedEventsByCategory => {
-          await Promise.all(
-            HISTORICAL_EVENT_CATEGORIES.map(async currentCategory => {
-              const cachedEvents = generatedEventsByCategory[currentCategory] || { count: 0, events: [] };
+            return generatedEvents;
+          },
+          storeFreshData: async generatedEventsByCategory => {
+            await Promise.all(
+              HISTORICAL_EVENT_CATEGORIES.map(async currentCategory => {
+                const cachedEvents = generatedEventsByCategory[currentCategory] || { count: 0, events: [] };
 
-              if (isEmptySelection(cachedEvents)) {
-                return;
-              }
+                if (isEmptySelection(cachedEvents)) {
+                  return;
+                }
 
-              const cacheKey: CacheKey = {
-                date,
-                category: currentCategory,
-                viewType: viewType as 'today' | 'week',
-                version: CACHE_VERSION,
-              };
+                const cacheKey: CacheKey = {
+                  date,
+                  category: currentCategory,
+                  viewType: viewType as 'today' | 'week',
+                  version: CACHE_VERSION,
+                };
 
-              const key = generateCacheKey(cacheKey);
-              await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
-            })
-          );
-        }
-      });
+                const key = generateCacheKey(cacheKey);
+                await setCacheData(key, cachedEvents, viewType as 'today' | 'week');
+              })
+            );
+          },
+        })
+      );
+
+      const { data: eventsByCategory, cached } = await generationPromise;
 
       const visibleEventsByCategory = await getVisibleSelectionsByCategory(eventsByCategory);
 
@@ -339,7 +356,8 @@ export async function GET(request: NextRequest) {
     }
     
     const lockKey = getGenerationLockKey(date, viewType as 'today' | 'week', category as HistoricalEventCategory);
-    const { data: events, cached } = await runLockedGeneration({
+    const generationPromise = keepGenerationAlive(
+      runLockedGeneration({
       lockKey,
       readCachedData: async () => getCachedSingleCategoryResponse(key),
       generateFreshData: async () => generateHistoricalEvents({
@@ -353,7 +371,10 @@ export async function GET(request: NextRequest) {
 
         await setCacheData(key, generatedEvents, viewType as 'today' | 'week');
       }
-    });
+    })
+    );
+
+    const { data: events, cached } = await generationPromise;
 
     const visibleEvents = await getVisibleSelection(events);
 
