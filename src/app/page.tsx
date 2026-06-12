@@ -1154,7 +1154,7 @@ export default function Home() {
                   data-accordion-item
                   ref={(el) => { accordionRefs.current[category] = el; }}
                 >
-                  <Card className="overflow-hidden border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-xl transition-all duration-300 hover:scale-[1.01]">
+                  <Card className="overflow-hidden border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-xl transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5">
                     <AccordionTrigger className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180">
                       <div 
                         className="relative h-16 md:h-20 overflow-hidden w-full"
@@ -1217,7 +1217,7 @@ export default function Home() {
                               const isReported = reportedContent[reportKey] || false;
                               
                               return (
-                                <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-md transition-all duration-200 hover:scale-[1.005]">
+                                <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-md transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5">
                                   <CardContent className="p-4">
                                     <div className="space-y-3">
                                       {/* Header with title and action buttons */}
