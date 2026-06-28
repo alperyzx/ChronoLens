@@ -510,8 +510,16 @@ export default function Home() {
   const baseHeaderShrunken = useHeaderShrink(100);
   const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
   const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const batchRetryTimerRef = useRef<number | null>(null);
   const [warmupCategoryIndex, setWarmupCategoryIndex] = useState(0);
   const { toast } = useToast();
+
+  const clearBatchRetryTimer = () => {
+    if (batchRetryTimerRef.current !== null) {
+      window.clearTimeout(batchRetryTimerRef.current);
+      batchRetryTimerRef.current = null;
+    }
+  };
 
   // Handle accordion value changes and smooth scroll
   const handleAccordionChange = (value: string[]) => {
@@ -583,6 +591,12 @@ export default function Home() {
     setHiddenContent(hiddenMap);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      clearBatchRetryTimer();
+    };
+  }, []);
+
   const shouldShowWarmupBanner = showGeminiWarmup;
 
   const getRenderableEvents = (selection?: HistoricalEventCategoryPayload): HistoricalEvent[] => {
@@ -638,8 +652,9 @@ export default function Home() {
     const dateString = getRequestDateString();
     const clientCacheKey = getClientCacheKey('batch', viewType, dateString);
     const hasClientCache = Boolean(getClientCache<HistoricalEventsByCategory>(clientCacheKey));
+    let shouldKeepWarmupVisible = false;
 
-    setShowGeminiWarmup(false);
+    clearBatchRetryTimer();
 
     if (!hasClientCache) {
       try {
@@ -648,6 +663,7 @@ export default function Home() {
           const metadata = await metadataResponse.json();
           if (metadata?.generationRequired === true) {
             setShowGeminiWarmup(true);
+            shouldKeepWarmupVisible = true;
           }
         }
       } catch (metadataError) {
@@ -667,6 +683,7 @@ export default function Home() {
     
     try {
       const {eventsByCategory, cached} = await getHistoricalEventsForAllCategories(isTodayView);
+      const hasEvents = hasAnyHistoricalEventsByCategory(eventsByCategory);
 
       setHistoricalEvents(prev => ({
         ...prev,
@@ -679,17 +696,30 @@ export default function Home() {
           return accumulator;
         }, {} as Record<string, boolean>)
       );
+
+      if (!cached && !hasEvents && shouldKeepWarmupVisible) {
+        batchRetryTimerRef.current = window.setTimeout(() => {
+          void fetchAllEvents();
+        }, 10000);
+        return;
+      }
+
+      shouldKeepWarmupVisible = false;
     } catch (error) {
       console.error('Failed to fetch all categories', error);
     } finally {
-      setShowGeminiWarmup(false);
+      if (!shouldKeepWarmupVisible) {
+        setShowGeminiWarmup(false);
+      }
 
-      setLoadingCategories(
-        categories.reduce((accumulator, category) => {
-          accumulator[category] = false;
-          return accumulator;
-        }, {} as Record<string, boolean>)
-      );
+      if (!shouldKeepWarmupVisible) {
+        setLoadingCategories(
+          categories.reduce((accumulator, category) => {
+            accumulator[category] = false;
+            return accumulator;
+          }, {} as Record<string, boolean>)
+        );
+      }
     }
   };
 
@@ -698,6 +728,7 @@ export default function Home() {
   }, [isTodayView]);
 
   const toggleView = () => {
+    clearBatchRetryTimer();
     setIsTodayView(!isTodayView);
   };
 
