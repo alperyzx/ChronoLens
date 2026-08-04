@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type TouchEvent } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
 import { Switch } from "@/components/ui/switch";
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Footer } from "@/components/navigation";
 import { useHeaderShrink } from "@/hooks/use-header-shrink";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from "@/lib/historical-event-categories";
 import { normalizeCacheDate } from "@/lib/cache-keys";
@@ -520,8 +521,11 @@ export default function Home() {
   // Use a simpler logic: expand header when all accordions are closed
   const baseHeaderShrunken = useHeaderShrink(100);
   const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
+  const isMobile = useIsMobile();
   const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const batchRetryTimerRef = useRef<number | null>(null);
+  const swipeStartXRef = useRef<number | null>(null);
+  const swipeStartYRef = useRef<number | null>(null);
   const [warmupCategoryIndex, setWarmupCategoryIndex] = useState(0);
   const { toast } = useToast();
 
@@ -782,6 +786,45 @@ export default function Home() {
     setSelectedWeekOffset(current => Math.max(0, current - 1));
   };
 
+  const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobile) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    swipeStartXRef.current = touch.clientX;
+    swipeStartYRef.current = touch.clientY;
+  };
+
+  const handleTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    if (!isMobile || swipeStartXRef.current === null || swipeStartYRef.current === null) {
+      return;
+    }
+
+    const touch = event.changedTouches[0];
+    const deltaX = touch.clientX - swipeStartXRef.current;
+    const deltaY = touch.clientY - swipeStartYRef.current;
+
+    swipeStartXRef.current = null;
+    swipeStartYRef.current = null;
+
+    if (Math.abs(deltaX) < 60 || Math.abs(deltaX) < Math.abs(deltaY)) {
+      return;
+    }
+
+    if (deltaX < 0) {
+      goForward();
+      return;
+    }
+
+    goBackward();
+  };
+
+  const handleTouchCancel = () => {
+    swipeStartXRef.current = null;
+    swipeStartYRef.current = null;
+  };
+
   // Share content function - Enhanced for mobile devices
   const shareContent = async (event: HistoricalEvent) => {
     // Create shareable content with domain prominently featured
@@ -971,6 +1014,10 @@ export default function Home() {
           ? "bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900"
           : "bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 dark:from-slate-900 dark:via-amber-950/40 dark:to-rose-950/40"
       )}
+      style={isMobile ? { touchAction: "pan-y" } : undefined}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
     >
       {/* Modern animated background */}
       <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
@@ -1127,75 +1174,101 @@ export default function Home() {
                   )}
                 </div>
                 
-                <div className="grid grid-cols-[2rem_auto_2rem] items-center gap-2">
-                  <div className="h-8 w-8">
-                    {showBackwardButton ? (
-                      <button
-                        type="button"
-                        onClick={goBackward}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
-                        aria-label={isTodayView ? "Previous day" : "Previous week"}
-                        title={isTodayView ? "Previous day" : "Previous week"}
-                      >
-                        <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                        </svg>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
-                        aria-hidden="true"
-                        tabIndex={-1}
-                      />
-                    )}
+                {isMobile ? (
+                  <div className="flex w-full justify-end">
+                    <button
+                      onClick={toggleView}
+                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-3 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
+                      title={nextViewLabel}
+                    >
+                      {isTodayView ? (
+                        <>
+                          <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
+                          </svg>
+                          <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
+                          </svg>
+                          <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
+                        </>
+                      )}
+                    </button>
                   </div>
+                ) : (
+                  <div className="grid grid-cols-[2rem_auto_2rem] items-center gap-2">
+                    <div className="h-8 w-8">
+                      {showBackwardButton ? (
+                        <button
+                          type="button"
+                          onClick={goBackward}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                          aria-label={isTodayView ? "Previous day" : "Previous week"}
+                          title={isTodayView ? "Previous day" : "Previous week"}
+                        >
+                          <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                          aria-hidden="true"
+                          tabIndex={-1}
+                        />
+                      )}
+                    </div>
 
-                  <button 
-                    onClick={toggleView}
-                    className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
-                    title={nextViewLabel}
-                  >
-                    {isTodayView ? (
-                      <>
-                        <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
-                        </svg>
-                        <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
-                        </svg>
-                        <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
-                      </>
-                    )}
-                  </button>
+                    <button 
+                      onClick={toggleView}
+                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
+                      title={nextViewLabel}
+                    >
+                      {isTodayView ? (
+                        <>
+                          <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-59.3-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
+                          </svg>
+                          <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
+                          </svg>
+                          <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
+                        </>
+                      )}
+                    </button>
 
-                  <div className="h-8 w-8 justify-self-end">
-                    {canGoForward ? (
-                      <button
-                        type="button"
-                        onClick={goForward}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
-                        aria-label={isTodayView ? "Next day" : "This week"}
-                        title={isTodayView ? "Next day" : "This week"}
-                      >
-                        <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
-                        aria-hidden="true"
-                        tabIndex={-1}
-                      />
-                    )}
+                    <div className="h-8 w-8 justify-self-end">
+                      {canGoForward ? (
+                        <button
+                          type="button"
+                          onClick={goForward}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                          aria-label={isTodayView ? "Next day" : "This week"}
+                          title={isTodayView ? "Next day" : "This week"}
+                        >
+                          <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                          aria-hidden="true"
+                          tabIndex={-1}
+                        />
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
               
               {/* Subtitle - Optional, minimal */}
@@ -1220,65 +1293,91 @@ export default function Home() {
               <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/15 bg-white/15 px-6 py-8 text-center shadow-[0_24px_90px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:bg-slate-950/35">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(96,165,250,0.18),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(244,114,182,0.14),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(250,204,21,0.14),transparent_28%)]" />
                 <div className="relative flex flex-col items-center gap-5">
-                  <button
-                    type="button"
-                    onClick={goBackward}
-                    className={cn(
-                      "inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70",
-                      !showBackwardButton && "invisible pointer-events-none"
-                    )}
-                    aria-hidden={!showBackwardButton}
-                    tabIndex={showBackwardButton ? 0 : -1}
-                    aria-label={isTodayView ? "Previous day" : "Previous week"}
-                    title={isTodayView ? "Previous day" : "Previous week"}
-                  >
-                    <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-
-                  <button 
-                    onClick={toggleView}
-                    className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
-                    title={nextViewLabel}
-                  >
-                    {isTodayView ? (
-                      <>
-                        <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
-                        </svg>
-                        <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
-                      </>
+                    {isMobile ? (
+                      <button 
+                        onClick={toggleView}
+                        className="flex self-end items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-3 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
+                        title={nextViewLabel}
+                      >
+                        {isTodayView ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
+                            </svg>
+                            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
+                            </svg>
+                            <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
+                          </>
+                        )}
+                      </button>
                     ) : (
                       <>
-                        <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
-                        </svg>
-                        <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
+                        <button
+                          type="button"
+                          onClick={goBackward}
+                          className={cn(
+                            "inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70",
+                            !showBackwardButton && "invisible pointer-events-none"
+                          )}
+                          aria-hidden={!showBackwardButton}
+                          tabIndex={showBackwardButton ? 0 : -1}
+                          aria-label={isTodayView ? "Previous day" : "Previous week"}
+                          title={isTodayView ? "Previous day" : "Previous week"}
+                        >
+                          <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                          </svg>
+                        </button>
+
+                        <button 
+                          onClick={toggleView}
+                          className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
+                          title={nextViewLabel}
+                        >
+                          {isTodayView ? (
+                            <>
+                              <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
+                              </svg>
+                              <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
+                              </svg>
+                              <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
+                            </>
+                          )}
+                        </button>
+
+                        {canGoForward ? (
+                          <button
+                            type="button"
+                            onClick={goForward}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                            aria-label={isTodayView ? "Next day" : "This week"}
+                            title={isTodayView ? "Next day" : "This week"}
+                          >
+                            <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                            aria-hidden="true"
+                            tabIndex={-1}
+                          />
+                        )}
                       </>
                     )}
-                  </button>
-
-                  {canGoForward ? (
-                    <button
-                      type="button"
-                      onClick={goForward}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
-                      aria-label={isTodayView ? "Next day" : "This week"}
-                      title={isTodayView ? "Next day" : "This week"}
-                    >
-                      <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
-                      aria-hidden="true"
-                      tabIndex={-1}
-                    />
-                  )}
                 </div>
               </div>
               </div>
