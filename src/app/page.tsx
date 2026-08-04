@@ -1091,7 +1091,7 @@ export default function Home() {
       
       {/* Header - Sticky with Responsive Design */}
       <div className={cn(
-        "sticky top-0 z-40 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out will-change-padding",
+        "sticky top-0 z-40 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out will-change-padding select-none",
         isTodayView
           ? "bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95"
           : "bg-gradient-to-br from-amber-50/95 via-orange-50/95 to-rose-50/95 dark:from-slate-900/95 dark:via-amber-950/40 dark:to-rose-950/40",
@@ -1120,6 +1120,11 @@ export default function Home() {
                   )}>
                     ChronoLens
                   </h1>
+                  {isHeaderShrunken && (
+                    <span className="hidden sm:inline-flex items-center rounded-full border border-slate-200/70 bg-white/70 px-2.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/70 dark:text-slate-300">
+                      {selectedPeriodLabel}
+                    </span>
+                  )}
                 </div>
                 
                 <div className="grid grid-cols-[2rem_auto_2rem] items-center gap-2">
@@ -1198,7 +1203,7 @@ export default function Home() {
                 "overflow-hidden transition-all duration-300 ease-in-out",
                 isHeaderShrunken ? "max-h-0 opacity-0 mt-0" : "max-h-16 opacity-100 mt-1"
               )}>
-                <p className="text-slate-600 dark:text-slate-300 text-base">
+                <p className="text-slate-600 dark:text-slate-300 text-base select-none">
                   Discover historical events across {selectedPeriodLabel}
                 </p>
               </div>
