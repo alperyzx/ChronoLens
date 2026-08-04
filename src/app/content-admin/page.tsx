@@ -527,8 +527,8 @@ export default function ContentAdmin() {
             <p><strong>Cache Strategy:</strong> Persistent cache with Firestore Enterprise as the primary backend when enabled</p>
             <p><strong>TTL Policy:</strong></p>
             <ul className="ml-4 space-y-1">
-              <li>• <strong>Today view:</strong> Cache expires at midnight (daily refresh)</li>
-              <li>• <strong>Week view:</strong> Cache expires at end of week/Sunday (weekly refresh)</li>
+              <li>• <strong>Today view:</strong> Cache persists for 7 days</li>
+              <li>• <strong>Week view:</strong> Cache persists for 2 weeks</li>
             </ul>
             <p><strong>Cache Keys:</strong> Format: chronolens_events_[viewType]_[category]_[date]</p>
             <p><strong>Benefits:</strong> Minimizes Gemini API requests, survives server restarts, shared cache across all users</p>

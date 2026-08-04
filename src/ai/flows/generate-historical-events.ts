@@ -19,39 +19,36 @@ import {
   buildSingleEventWeekPrompt,
 } from '@/lib/gemini-prompt-builders';
 
-// Helper function to calculate the current week's date range
-function getWeekDateRange(): { startDate: string; endDate: string; monthDay: string } {
-  const today = new Date();
-  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-  
-  // Calculate start of week (Sunday)
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - dayOfWeek);
-  
-  // Calculate end of week (Saturday)
+// Helper function to calculate a week's date range for the selected anchor date.
+function getWeekDateRange(anchorDate: string): { startDate: string; endDate: string; monthDay: string } {
+  const [year, month, day] = anchorDate.split('-').map(Number);
+  const anchor = new Date(year, month - 1, day);
+  const dayOfWeek = anchor.getDay();
+
+  const startOfWeek = new Date(anchor);
+  startOfWeek.setDate(anchor.getDate() - dayOfWeek);
+
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(startOfWeek.getDate() + 6);
-  
+
   const startMonth = startOfWeek.toLocaleDateString('en-US', { month: 'long' });
   const endMonth = endOfWeek.toLocaleDateString('en-US', { month: 'long' });
   const startDay = startOfWeek.getDate();
   const endDay = endOfWeek.getDate();
-  
-  // Format: "November 24-30" or "November 30-December 6"
-  const monthDay = startMonth === endMonth 
+
+  const monthDay = startMonth === endMonth
     ? `${startMonth} ${startDay}-${endDay}`
     : `${startMonth} ${startDay}-${endMonth} ${endDay}`;
-  
-  // Get MM-DD format for validation
+
   const startMM = String(startOfWeek.getMonth() + 1).padStart(2, '0');
   const startDD = String(startDay).padStart(2, '0');
   const endMM = String(endOfWeek.getMonth() + 1).padStart(2, '0');
   const endDD = String(endDay).padStart(2, '0');
-  
+
   return {
     startDate: `${startMM}-${startDD}`,
     endDate: `${endMM}-${endDD}`,
-    monthDay
+    monthDay,
   };
 }
 
@@ -157,7 +154,8 @@ function normalizeSelection(selection: GenerateHistoricalEventsOutput): Generate
 }
 
 const GenerateHistoricalEventsInputSchema = z.object({
-  date: z.string().describe('The date for which to retrieve historical events (YYYY-MM-DD or "This Week").'),
+  date: z.string().describe('The anchor date for which to retrieve historical events (YYYY-MM-DD).'),
+  viewType: z.enum(['today', 'week']).describe('Whether to generate a single-day or week-based selection.'),
   category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of historical events to retrieve.'),
 });
 export type GenerateHistoricalEventsInput = z.infer<typeof GenerateHistoricalEventsInputSchema>;
@@ -400,20 +398,19 @@ const generateHistoricalEventsFlow = ai.defineFlow<
     outputSchema: GenerateHistoricalEventsOutputSchema,
   },
   async input => {
-    const {date} = input;
-    if (date === 'This Week') {
-      // Get today's date for context (Gemini will use week range to filter)
-      const today = new Date().toISOString().slice(0, 10);
-      const weekInfo = getWeekDateRange();
+    const {date, viewType} = input;
+
+    if (viewType === 'week') {
+      const weekInfo = getWeekDateRange(date);
       const weekOutput = await generateHistoricalEventsWithCache({
         cacheId: 'historical-events-single-week',
         displayName: 'chronolens historical events single week',
         instructions: SINGLE_EVENT_WEEK_CACHE_INSTRUCTIONS,
-        prompt: buildSingleEventWeekPrompt({ ...input, date: today }, weekInfo),
+        prompt: buildSingleEventWeekPrompt({ date, category: input.category }, weekInfo),
         outputSchema: GenerateHistoricalEventsOutputSchema,
         ttlSeconds: getTTLUntilEndOfWeek(),
       });
-      // Filter out any events that don't match the week range
+
       return normalizeSelection(filterSelectionByDateRange(weekOutput || { count: 0, events: [] }, weekInfo.startDate, weekInfo.endDate));
     }
 
@@ -443,17 +440,15 @@ const generateHistoricalEventsByCategoryFlow = ai.defineFlow<
     outputSchema: HistoricalEventsByCategorySchema,
   },
   async input => {
-    const {date} = input;
+    const {date, viewType} = input;
 
-    if (date === 'This Week') {
-      // Get today's date for context (Gemini will use week range to filter)
-      const today = new Date().toISOString().slice(0, 10);
-      const weekInfo = getWeekDateRange();
+    if (viewType === 'week') {
+      const weekInfo = getWeekDateRange(date);
       const weekOutput = await generateHistoricalEventsWithCache({
         cacheId: 'historical-events-batch-week',
         displayName: 'chronolens historical events batch week',
         instructions: BATCH_EVENT_WEEK_CACHE_INSTRUCTIONS,
-        prompt: buildBatchEventWeekPrompt(today, weekInfo),
+        prompt: buildBatchEventWeekPrompt(date, weekInfo),
         outputSchema: HistoricalEventsByCategorySchema,
         ttlSeconds: getTTLUntilEndOfWeek(),
       });

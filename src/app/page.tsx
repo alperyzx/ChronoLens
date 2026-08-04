@@ -185,7 +185,27 @@ function markEventAsHidden(reportKey: string): void {
 }
 
 function getRequestDateString(): string {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  now.setHours(12, 0, 0, 0);
+  return now.toISOString().slice(0, 10);
+}
+
+function getDateStringWithOffset(daysBack: number): string {
+  const date = new Date();
+  date.setHours(12, 0, 0, 0);
+  date.setDate(date.getDate() - daysBack);
+  return date.toISOString().slice(0, 10);
+}
+
+function formatMonthDay(dateString: string): string {
+  const date = new Date(`${dateString}T12:00:00Z`);
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+}
+
+function getSelectedPeriodDateString(isTodayView: boolean, selectedDayOffset: number, selectedWeekOffset: number): string {
+  return isTodayView
+    ? getDateStringWithOffset(selectedDayOffset)
+    : getDateStringWithOffset(selectedWeekOffset * 7);
 }
 
 function getClientCacheKey(scope: 'single' | 'batch', viewType: 'today' | 'week', date: string, category?: string): string {
@@ -197,19 +217,10 @@ function getClientCacheExpiration(viewType: 'today' | 'week'): number {
   const now = new Date();
 
   if (viewType === 'today') {
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    return tomorrow.getTime();
+    return now.getTime() + (7 * 24 * 60 * 60 * 1000);
   }
 
-  const endOfWeek = new Date(now);
-  const currentDay = now.getDay();
-  const daysUntilSunday = currentDay === 0 ? 7 : 7 - currentDay;
-
-  endOfWeek.setDate(now.getDate() + daysUntilSunday);
-  endOfWeek.setHours(0, 0, 0, 0);
-  return endOfWeek.getTime();
+  return now.getTime() + (14 * 24 * 60 * 60 * 1000);
 }
 
 function hasAnyHistoricalEventsByCategory(eventsByCategory: Record<HistoricalEventCategory, HistoricalEventSelection>): boolean {
@@ -368,9 +379,8 @@ const categoryBackgrounds = {
   Literature: "linear-gradient(135deg, #5f27cd 0%, #341f97 100%)",
 };
 
-async function getHistoricalEventsForCategory(category: string, isTodayView: boolean): Promise<{events: HistoricalEventCategoryPayload, cached: boolean}> {
+async function getHistoricalEventsForCategory(category: string, isTodayView: boolean, dateString: string): Promise<{events: HistoricalEventCategoryPayload, cached: boolean}> {
   const viewType = isTodayView ? 'today' : 'week';
-  const dateString = getRequestDateString();
   const clientCacheKey = getClientCacheKey('single', viewType, dateString, category);
   const reportCacheRevision = await getReportCacheRevision(dateString, viewType, category);
 
@@ -430,9 +440,8 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
   }
 }
 
-async function getHistoricalEventsForAllCategories(isTodayView: boolean): Promise<{eventsByCategory: HistoricalEventsByCategory, cached: boolean}> {
+async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateString: string): Promise<{eventsByCategory: HistoricalEventsByCategory, cached: boolean}> {
   const viewType = isTodayView ? 'today' : 'week';
-  const dateString = getRequestDateString();
   const clientCacheKey = getClientCacheKey('batch', viewType, dateString);
   const reportCacheRevision = await getReportCacheRevision(dateString, viewType);
 
@@ -496,6 +505,8 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean): Promis
 
 export default function Home() {
   const [isTodayView, setIsTodayView] = useState(true);
+  const [selectedDayOffset, setSelectedDayOffset] = useState(0);
+  const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
   const [historicalEvents, setHistoricalEvents] = useState<CategoryEvents>({});
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
   const [showGeminiWarmup, setShowGeminiWarmup] = useState(false);
@@ -556,6 +567,14 @@ export default function Home() {
       if (storedView) {
         setIsTodayView(storedView === "true");
       }
+      const storedDayOffset = localStorage.getItem("selectedDayOffset");
+      if (storedDayOffset) {
+        setSelectedDayOffset(Number(storedDayOffset) || 0);
+      }
+      const storedWeekOffset = localStorage.getItem("selectedWeekOffset");
+      if (storedWeekOffset) {
+        setSelectedWeekOffset(Number(storedWeekOffset) || 0);
+      }
     }
   }, []);
 
@@ -563,8 +582,10 @@ export default function Home() {
     // Save view preference
     if (typeof window !== "undefined") {
       localStorage.setItem("isTodayView", String(isTodayView));
+      localStorage.setItem("selectedDayOffset", String(selectedDayOffset));
+      localStorage.setItem("selectedWeekOffset", String(selectedWeekOffset));
     }
-  }, [isTodayView]);
+  }, [isTodayView, selectedDayOffset, selectedWeekOffset]);
 
   useEffect(() => {
     const keys = loadReportedContentKeys();
@@ -631,7 +652,8 @@ export default function Home() {
     setLoadingCategories(prev => ({ ...prev, [category]: true }));
     
     try {
-      const {events, cached} = await getHistoricalEventsForCategory(category, isTodayView);
+      const dateString = getSelectedPeriodDateString(isTodayView, selectedDayOffset, selectedWeekOffset);
+      const {events, cached} = await getHistoricalEventsForCategory(category, isTodayView, dateString);
       setHistoricalEvents(prev => ({
         ...prev,
         [category]: events
@@ -649,7 +671,7 @@ export default function Home() {
 
   const fetchAllEvents = async () => {
     const viewType = isTodayView ? 'today' : 'week';
-    const dateString = getRequestDateString();
+    const dateString = getSelectedPeriodDateString(isTodayView, selectedDayOffset, selectedWeekOffset);
     const clientCacheKey = getClientCacheKey('batch', viewType, dateString);
     const hasClientCache = Boolean(getClientCache<HistoricalEventsByCategory>(clientCacheKey));
     let shouldKeepWarmupVisible = false;
@@ -682,7 +704,7 @@ export default function Home() {
     setCacheStatus({});
     
     try {
-      const {eventsByCategory, cached} = await getHistoricalEventsForAllCategories(isTodayView);
+      const {eventsByCategory, cached} = await getHistoricalEventsForAllCategories(isTodayView, dateString);
       const hasEvents = hasAnyHistoricalEventsByCategory(eventsByCategory);
 
       setHistoricalEvents(prev => ({
@@ -725,7 +747,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchAllEvents();
-  }, [isTodayView]);
+  }, [isTodayView, selectedDayOffset, selectedWeekOffset]);
 
   const toggleView = () => {
     clearBatchRetryTimer();
@@ -734,6 +756,31 @@ export default function Home() {
 
   const activeViewLabel = isTodayView ? "Today View" : "Week View";
   const nextViewLabel = isTodayView ? "Switch to Week View" : "Switch to Today View";
+  const selectedPeriodLabel = isTodayView
+    ? formatMonthDay(getSelectedPeriodDateString(true, selectedDayOffset, selectedWeekOffset))
+    : selectedWeekOffset === 0
+      ? 'This week'
+      : 'Previous week';
+  const canGoForward = isTodayView ? selectedDayOffset > 0 : selectedWeekOffset > 0;
+  const showBackwardButton = isTodayView || selectedWeekOffset === 0;
+  const goBackward = () => {
+    clearBatchRetryTimer();
+    if (isTodayView) {
+      setSelectedDayOffset(current => Math.min(6, current + 1));
+      return;
+    }
+
+    setSelectedWeekOffset(current => Math.min(1, current + 1));
+  };
+  const goForward = () => {
+    clearBatchRetryTimer();
+    if (isTodayView) {
+      setSelectedDayOffset(current => Math.max(0, current - 1));
+      return;
+    }
+
+    setSelectedWeekOffset(current => Math.max(0, current - 1));
+  };
 
   // Share content function - Enhanced for mobile devices
   const shareContent = async (event: HistoricalEvent) => {
@@ -1075,28 +1122,75 @@ export default function Home() {
                   </h1>
                 </div>
                 
-                {/* Day/Week Toggle - Clean and inspiring with relevant icons */}
-                <button 
-                  onClick={toggleView}
-                  className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-3 py-2 shadow-md backdrop-blur-sm hover:shadow-lg transition-all duration-200 dark:border-slate-700/60 dark:bg-slate-800/70 group"
-                  title={nextViewLabel}
-                >
-                  {isTodayView ? (
-                    <>
-                      <svg className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
-                      </svg>
-                      <span className="text-xs font-semibold text-amber-600 dark:text-amber-400">Today</span>
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
-                      </svg>
-                      <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">Week</span>
-                    </>
-                  )}
-                </button>
+                <div className="grid grid-cols-[2rem_auto_2rem] items-center gap-2">
+                  <div className="h-8 w-8">
+                    {showBackwardButton ? (
+                      <button
+                        type="button"
+                        onClick={goBackward}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                        aria-label={isTodayView ? "Previous day" : "Previous week"}
+                        title={isTodayView ? "Previous day" : "Previous week"}
+                      >
+                        <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                      />
+                    )}
+                  </div>
+
+                  <button 
+                    onClick={toggleView}
+                    className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
+                    title={nextViewLabel}
+                  >
+                    {isTodayView ? (
+                      <>
+                        <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
+                        </svg>
+                        <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
+                        </svg>
+                        <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="h-8 w-8 justify-self-end">
+                    {canGoForward ? (
+                      <button
+                        type="button"
+                        onClick={goForward}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                        aria-label={isTodayView ? "Next day" : "This week"}
+                        title={isTodayView ? "Next day" : "This week"}
+                      >
+                        <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                        aria-hidden="true"
+                        tabIndex={-1}
+                      />
+                    )}
+                  </div>
+                </div>
               </div>
               
               {/* Subtitle - Optional, minimal */}
@@ -1105,7 +1199,7 @@ export default function Home() {
                 isHeaderShrunken ? "max-h-0 opacity-0 mt-0" : "max-h-16 opacity-100 mt-1"
               )}>
                 <p className="text-slate-600 dark:text-slate-300 text-base">
-                  Discover historical events across {isTodayView ? "today" : "this week"}
+                  Discover historical events across {selectedPeriodLabel}
                 </p>
               </div>
             </div>
@@ -1121,62 +1215,75 @@ export default function Home() {
               <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/15 bg-white/15 px-6 py-8 text-center shadow-[0_24px_90px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:bg-slate-950/35">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(96,165,250,0.18),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(244,114,182,0.14),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(250,204,21,0.14),transparent_28%)]" />
                 <div className="relative flex flex-col items-center gap-5">
-                  <div className="relative flex h-28 w-28 items-center justify-center">
-                    <div className="absolute inset-0 rounded-full border border-slate-300/60 animate-[spin_14s_linear_infinite] dark:border-indigo-400/25" />
-                    <div className="absolute inset-4 rounded-full border border-sky-400/45 animate-[spin_10s_linear_infinite_reverse] dark:border-cyan-300/35" />
-                    <div className="absolute inset-8 rounded-full border border-fuchsia-400/30 animate-pulse dark:border-fuchsia-300/25" />
-                    <div className="absolute inset-11 rounded-full bg-gradient-to-br from-white/30 via-cyan-200/30 to-fuchsia-200/30 blur-xl" />
-                    <Icons.spinner className="relative h-11 w-11 text-slate-700 animate-spin drop-shadow-[0_0_18px_rgba(255,255,255,0.35)] dark:text-white dark:drop-shadow-[0_0_18px_rgba(255,255,255,0.6)]" />
-                  </div>
+                  <button
+                    type="button"
+                    onClick={goBackward}
+                    className={cn(
+                      "inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70",
+                      !showBackwardButton && "invisible pointer-events-none"
+                    )}
+                    aria-hidden={!showBackwardButton}
+                    tabIndex={showBackwardButton ? 0 : -1}
+                    aria-label={isTodayView ? "Previous day" : "Previous week"}
+                    title={isTodayView ? "Previous day" : "Previous week"}
+                  >
+                    <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
 
-                  <div className="space-y-2 max-w-lg">
-                    <div className="inline-flex items-center rounded-full border border-slate-300/70 bg-white/70 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-900 shadow-sm dark:border-white/20 dark:bg-white/10 dark:text-white/80">
-                      One-time warmup
-                    </div>
-                    <h2 className="text-2xl font-bold tracking-tight text-slate-950 drop-shadow-[0_1px_0_rgba(255,255,255,0.55)] dark:text-white md:text-4xl">
-                      Curating fresh historical selections
-                    </h2>
-                    <p className="text-balance text-sm leading-6 text-slate-800 dark:text-white/75 md:text-base">
-                      Gemini is generating a fresh ranked set of events for this view.
-                    </p>
-                  </div>
+                  <button 
+                    onClick={toggleView}
+                    className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
+                    title={nextViewLabel}
+                  >
+                    {isTodayView ? (
+                      <>
+                        <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
+                        </svg>
+                        <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
+                        </svg>
+                        <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
+                      </>
+                    )}
+                  </button>
 
-                  <div className="flex w-full max-w-md items-end justify-center gap-2 pt-1" aria-hidden="true">
-                    <span className="h-3 w-3 rounded-full bg-cyan-300 animate-bounce [animation-delay:-0.3s]" />
-                    <span className="h-5 w-3 rounded-full bg-sky-300 animate-bounce [animation-delay:-0.15s]" />
-                    <span className="h-7 w-3 rounded-full bg-fuchsia-300 animate-bounce" />
-                    <span className="h-4 w-3 rounded-full bg-amber-300 animate-bounce [animation-delay:-0.2s]" />
-                    <span className="h-3 w-3 rounded-full bg-emerald-300 animate-bounce [animation-delay:-0.35s]" />
-                  </div>
-
-                  <div className="flex w-full items-center justify-center gap-3 pt-1" aria-live="polite" aria-atomic="true">
-                    <div className="relative h-8 w-[11rem] overflow-hidden rounded-full border border-slate-300/60 bg-white/70 shadow-sm dark:border-white/10 dark:bg-white/10">
-                      <div
-                        className="flex h-full transition-transform duration-500 ease-in-out"
-                        style={{ transform: `translateX(-${warmupCategoryIndex * 100}%)` }}
-                      >
-                        {categories.map((category) => (
-                          <div key={category} className="flex h-full min-w-full items-center justify-center px-3">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-900 dark:text-white">
-                              {category}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
+                  {canGoForward ? (
+                    <button
+                      type="button"
+                      onClick={goForward}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                      aria-label={isTodayView ? "Next day" : "This week"}
+                      title={isTodayView ? "Next day" : "This week"}
+                    >
+                      <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                      aria-hidden="true"
+                      tabIndex={-1}
+                    />
+                  )}
                 </div>
               </div>
-            </div>
-          )}
-
-            <div className={cn("w-full", shouldShowWarmupBanner && "hidden")}>
-            <Accordion 
-              type="multiple" 
-              className="space-y-4"
-              value={openAccordions}
-              onValueChange={handleAccordionChange}
-            >
+              </div>
+              )}
+              <Accordion 
+                type="multiple" 
+                className="space-y-4"
+                value={openAccordions}
+                onValueChange={handleAccordionChange}
+              >
               {categories.map((category) => (
                 <AccordionItem 
                   key={category} 
@@ -1357,7 +1464,6 @@ export default function Home() {
             </Accordion>
           </div>
         </div>
-      </div>
       <Footer />
       
       {/* Report Confirmation Dialog */}

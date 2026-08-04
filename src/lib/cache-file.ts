@@ -53,8 +53,8 @@ interface CacheLockEntry {
   expiresAt: number;
 }
 
-const TODAY_TTL_SECONDS = 24 * 60 * 60;
-const WEEK_TTL_SECONDS = 7 * 24 * 60 * 60;
+const TODAY_TTL_SECONDS = 7 * 24 * 60 * 60;
+const WEEK_TTL_SECONDS = 14 * 24 * 60 * 60;
 const DEFAULT_LOCK_TTL_MS = 4 * 60 * 1000;
 const LOCK_POLL_INTERVAL_MS = 1000;
 
@@ -255,29 +255,12 @@ export function generateCacheKey(key: CacheKey): string {
 
 // Get TTL until next midnight (in seconds)
 export function getTTLUntilMidnight(): number {
-  const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(now.getDate() + 1);
-  tomorrow.setHours(0, 0, 0, 0);
-
-  const ttlMs = tomorrow.getTime() - now.getTime();
-  return Math.floor(ttlMs / 1000); // Convert to seconds
+  return TODAY_TTL_SECONDS;
 }
 
 // Get TTL until end of current week (Sunday at midnight)
 export function getTTLUntilEndOfWeek(): number {
-  const now = new Date();
-  const endOfWeek = new Date(now);
-
-  // Calculate days until Sunday (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
-  const currentDay = now.getDay();
-  const daysUntilSunday = currentDay === 0 ? 7 : 7 - currentDay; // If today is Sunday, cache for next Sunday
-
-  endOfWeek.setDate(now.getDate() + daysUntilSunday);
-  endOfWeek.setHours(0, 0, 0, 0); // Set to midnight of the end day
-
-  const ttlMs = endOfWeek.getTime() - now.getTime();
-  return Math.floor(ttlMs / 1000); // Convert to seconds
+  return WEEK_TTL_SECONDS;
 }
 
 // Get appropriate TTL based on view type
@@ -303,7 +286,7 @@ export async function setCacheData(key: string, data: CachedHistoricalEventSelec
     const filePath = getCacheFilePath(key);
     await fs.writeFile(filePath, JSON.stringify(cacheEntry, null, 2), 'utf8');
     
-    const expiryDescription = viewType === 'today' ? 'midnight' : 'end of week (Sunday)';
+    const expiryDescription = viewType === 'today' ? '7 days' : '2 weeks';
     console.log(`File cache set for key: ${key}, TTL: ${ttlSeconds} seconds (expires at ${expiryDescription})`);
   } catch (error) {
     console.error('Error setting file cache data:', error);
@@ -617,26 +600,21 @@ export function getCacheExpirationInfo(viewType: 'today' | 'week') {
   const now = new Date();
   
   if (viewType === 'today') {
-    const tomorrow = new Date(now);
-    tomorrow.setDate(now.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
+    const expiresAt = new Date(now);
+    expiresAt.setDate(now.getDate() + 7);
     
     return {
-      expiresAt: tomorrow,
-      description: 'midnight',
+      expiresAt,
+      description: '7 days',
       ttlSeconds: getTTLUntilMidnight()
     };
   } else {
-    const endOfWeek = new Date(now);
-    const currentDay = now.getDay();
-    const daysUntilSunday = currentDay === 0 ? 7 : 7 - currentDay;
-    
-    endOfWeek.setDate(now.getDate() + daysUntilSunday);
-    endOfWeek.setHours(0, 0, 0, 0);
+    const expiresAt = new Date(now);
+    expiresAt.setDate(now.getDate() + 14);
     
     return {
-      expiresAt: endOfWeek,
-      description: 'end of week (Sunday)',
+      expiresAt,
+      description: '2 weeks',
       ttlSeconds: getTTLUntilEndOfWeek()
     };
   }

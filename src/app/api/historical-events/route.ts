@@ -275,7 +275,8 @@ export async function GET(request: NextRequest) {
           readCachedData: async () => getCachedBatchResponse(date, viewType as 'today' | 'week'),
           generateFreshData: async () => {
             const generatedEvents = await generateHistoricalEventsByCategory({
-              date: viewType === 'week' ? 'This Week' : date,
+              date,
+              viewType: viewType as 'today' | 'week',
               category: 'Sociology'
             });
 
@@ -361,7 +362,8 @@ export async function GET(request: NextRequest) {
       lockKey,
       readCachedData: async () => getCachedSingleCategoryResponse(key),
       generateFreshData: async () => generateHistoricalEvents({
-        date: viewType === 'week' ? 'This Week' : date,
+        date,
+        viewType: viewType as 'today' | 'week',
         category: category as HistoricalEventCategory
       }),
       storeFreshData: async generatedEvents => {
