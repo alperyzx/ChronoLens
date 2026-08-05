@@ -1168,14 +1168,14 @@ export default function Home() {
                     ChronoLens
                   </h1>
                   {isHeaderShrunken && (
-                    <span className="hidden sm:inline-flex items-center rounded-full border border-slate-200/70 bg-white/70 px-2.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/70 dark:text-slate-300">
+                    <span className="inline-flex items-center whitespace-nowrap rounded-full border border-slate-200/70 bg-white/70 px-2.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/70 dark:text-slate-300">
                       {selectedPeriodLabel}
                     </span>
                   )}
                 </div>
                 
                 {isMobile ? (
-                  <div className="flex w-full justify-end">
+                  <div className="flex justify-end flex-shrink-0">
                     <button
                       onClick={toggleView}
                       className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-3 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
@@ -1293,95 +1293,60 @@ export default function Home() {
               <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/15 bg-white/15 px-6 py-8 text-center shadow-[0_24px_90px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:bg-slate-950/35">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(96,165,250,0.18),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(244,114,182,0.14),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(250,204,21,0.14),transparent_28%)]" />
                 <div className="relative flex flex-col items-center gap-5">
-                    {isMobile ? (
-                      <button 
-                        onClick={toggleView}
-                        className="flex self-end items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-3 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
-                        title={nextViewLabel}
+                  {/* Gemini spinner */}
+                  <div className="relative flex h-28 w-28 items-center justify-center">
+                    <div className="absolute inset-0 rounded-full border border-slate-300/60 animate-[spin_14s_linear_infinite] dark:border-indigo-400/25" />
+                    <div className="absolute inset-4 rounded-full border border-sky-400/45 animate-[spin_10s_linear_infinite_reverse] dark:border-cyan-300/35" />
+                    <div className="absolute inset-8 rounded-full border border-fuchsia-400/30 animate-pulse dark:border-fuchsia-300/25" />
+                    <div className="absolute inset-11 rounded-full bg-gradient-to-br from-white/30 via-cyan-200/30 to-fuchsia-200/30 blur-xl" />
+                    <Icons.spinner className="relative h-11 w-11 text-slate-700 animate-spin drop-shadow-[0_0_18px_rgba(255,255,255,0.35)] dark:text-white dark:drop-shadow-[0_0_18px_rgba(255,255,255,0.6)]" />
+                  </div>
+
+                  {/* Title and description */}
+                  <div className="space-y-2 max-w-lg">
+                    <div className="inline-flex items-center rounded-full border border-slate-300/70 bg-white/70 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-900 shadow-sm dark:border-white/20 dark:bg-white/10 dark:text-white/80">
+                      One-time warmup
+                    </div>
+                    <h2 className="text-2xl font-bold tracking-tight text-slate-950 drop-shadow-[0_1px_0_rgba(255,255,255,0.55)] dark:text-white md:text-4xl">
+                      Curating fresh historical selections
+                    </h2>
+                    <p className="text-balance text-sm leading-6 text-slate-800 dark:text-white/75 md:text-base">
+                      Gemini is generating a fresh ranked set of events for this view.
+                    </p>
+                  </div>
+
+                  {/* Bouncing dots */}
+                  <div className="flex w-full max-w-md items-end justify-center gap-2 pt-1" aria-hidden="true">
+                    <span className="h-3 w-3 rounded-full bg-cyan-300 animate-bounce [animation-delay:-0.3s]" />
+                    <span className="h-5 w-3 rounded-full bg-sky-300 animate-bounce [animation-delay:-0.15s]" />
+                    <span className="h-7 w-3 rounded-full bg-fuchsia-300 animate-bounce" />
+                    <span className="h-4 w-3 rounded-full bg-amber-300 animate-bounce [animation-delay:-0.2s]" />
+                    <span className="h-3 w-3 rounded-full bg-emerald-300 animate-bounce [animation-delay:-0.35s]" />
+                  </div>
+
+                  {/* Category carousel */}
+                  <div className="flex w-full items-center justify-center gap-3 pt-1" aria-live="polite" aria-atomic="true">
+                    <div className="relative h-8 w-[11rem] overflow-hidden rounded-full border border-slate-300/60 bg-white/70 shadow-sm dark:border-white/10 dark:bg-white/10">
+                      <div
+                        className="flex h-full transition-transform duration-500 ease-in-out"
+                        style={{ transform: `translateX(-${warmupCategoryIndex * 100}%)` }}
                       >
-                        {isTodayView ? (
-                          <>
-                            <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
-                            </svg>
-                            <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
-                            </svg>
-                            <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
-                          </>
-                        )}
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={goBackward}
-                          className={cn(
-                            "inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70",
-                            !showBackwardButton && "invisible pointer-events-none"
-                          )}
-                          aria-hidden={!showBackwardButton}
-                          tabIndex={showBackwardButton ? 0 : -1}
-                          aria-label={isTodayView ? "Previous day" : "Previous week"}
-                          title={isTodayView ? "Previous day" : "Previous week"}
-                        >
-                          <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                          </svg>
-                        </button>
+                        {categories.map((cat) => (
+                          <div key={cat} className="flex h-full min-w-full items-center justify-center px-3">
+                            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-900 dark:text-white">
+                              {cat}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
 
-                        <button 
-                          onClick={toggleView}
-                          className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
-                          title={nextViewLabel}
-                        >
-                          {isTodayView ? (
-                            <>
-                              <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
-                              </svg>
-                              <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
-                              </svg>
-                              <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
-                            </>
-                          )}
-                        </button>
-
-                        {canGoForward ? (
-                          <button
-                            type="button"
-                            onClick={goForward}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
-                            aria-label={isTodayView ? "Next day" : "This week"}
-                            title={isTodayView ? "Next day" : "This week"}
-                          >
-                            <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                            </svg>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
-                            aria-hidden="true"
-                            tabIndex={-1}
-                          />
-                        )}
-                      </>
-                    )}
                 </div>
               </div>
               </div>
               )}
+              <div className={cn("w-full", shouldShowWarmupBanner && "hidden")}>
               <Accordion 
                 type="multiple" 
                 className="space-y-4"
@@ -1566,6 +1531,7 @@ export default function Home() {
                 </AccordionItem>
               ))}
             </Accordion>
+              </div>
           </div>
         </div>
       <Footer />
