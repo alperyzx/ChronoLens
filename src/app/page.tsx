@@ -1199,7 +1199,7 @@ export default function Home() {
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-[2rem_auto_2rem] items-center gap-2">
+                  <div className="flex items-center gap-2">
                     <div className="h-8 w-8">
                       {showBackwardButton ? (
                         <button
@@ -1231,7 +1231,7 @@ export default function Home() {
                       {isTodayView ? (
                         <>
                           <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-59.3-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
                           </svg>
                           <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
                         </>
