@@ -1264,7 +1264,7 @@ export default function Home() {
                                             onClick={() => showReportConfirmation(event)}
                                             disabled={isReporting || isReported}
                                             aria-label={isReported ? "Already reported" : "Report inappropriate content"}
-                                            className="h-11 w-11 shrink-0 touch-manipulation rounded-lg bg-slate-200 text-slate-500 shadow-sm transition-colors duration-150 hover:bg-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-300"
+                                            className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-slate-200 text-slate-500 shadow-sm transition-colors duration-150 hover:bg-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-300"
                                             title={isReported ? "Already reported by you" : "Report inappropriate content"}
                                           >
                                             {isReporting ? (
@@ -1287,7 +1287,7 @@ export default function Home() {
                                           <button
                                             onClick={() => shareContent(event)}
                                             aria-label="Share this historical event"
-                                            className="h-11 w-11 shrink-0 touch-manipulation rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                                            className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                                             title="Share this historical event"
                                           >
                                             <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
