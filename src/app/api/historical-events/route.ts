@@ -16,10 +16,11 @@ import { filterHiddenContent } from '@/lib/report-cache';
 import { getReportStats } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from '@/lib/historical-event-categories';
 
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const GENERATION_LOCK_TTL_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_WAIT_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_POLL_MS = 1000;
+const SOURCE_URL_TIMEOUT_MS = 5000;
 
 export const maxDuration = 300;
 
@@ -38,6 +39,83 @@ function buildReportCacheRevision(stats: Awaited<ReturnType<typeof getReportStat
 
 function isEmptySelection(selection?: CachedHistoricalEventSelection | null): boolean {
   return !selection || selection.count <= 0 || !Array.isArray(selection.events) || selection.events.length === 0;
+}
+
+function normalizeSourceUrl(source: string): string | undefined {
+  try {
+    const url = new URL(source.trim());
+
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) {
+      return undefined;
+    }
+
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+// ponytail: checks URL reachability, not fact-to-page semantics; use grounded search when proof is required.
+async function validateSourceUrl(source: string): Promise<string> {
+  const normalizedSource = normalizeSourceUrl(source);
+  if (!normalizedSource) {
+    return '';
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SOURCE_URL_TIMEOUT_MS);
+
+  try {
+    let response = await fetch(normalizedSource, {
+      method: 'HEAD',
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+
+    if (!response.ok || response.status === 405) {
+      response = await fetch(normalizedSource, {
+        headers: { Range: 'bytes=0-4095' },
+        redirect: 'follow',
+        signal: controller.signal,
+      });
+    }
+
+    const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+    const isSupportedDocument = !contentType || contentType.includes('text/html') || contentType.includes('application/pdf');
+
+    if (!response.ok || !isSupportedDocument) {
+      return '';
+    }
+
+    return normalizeSourceUrl(response.url) || normalizedSource;
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function validateSelectionSources(selection: CachedHistoricalEventSelection): Promise<CachedHistoricalEventSelection> {
+  const events = await Promise.all(
+    selection.events.map(async event => ({
+      ...event,
+      source: await validateSourceUrl(event.source),
+    }))
+  );
+
+  return { ...selection, events };
+}
+
+async function validateCategorySources(selections: HistoricalEventsByCategory): Promise<HistoricalEventsByCategory> {
+  const entries = await Promise.all(
+    HISTORICAL_EVENT_CATEGORIES.map(async category => [
+      category,
+      await validateSelectionSources(selections[category] || emptySelection()),
+    ] as const)
+  );
+
+  return Object.fromEntries(entries) as HistoricalEventsByCategory;
 }
 
 function getGenerationLockKey(date: string, viewType: 'today' | 'week', scope: 'batch' | HistoricalEventCategory): string {
@@ -280,7 +358,7 @@ export async function GET(request: NextRequest) {
               category: 'Sociology'
             });
 
-            return generatedEvents;
+            return validateCategorySources(generatedEvents);
           },
           storeFreshData: async generatedEventsByCategory => {
             await Promise.all(
@@ -361,11 +439,11 @@ export async function GET(request: NextRequest) {
       runLockedGeneration({
       lockKey,
       readCachedData: async () => getCachedSingleCategoryResponse(key),
-      generateFreshData: async () => generateHistoricalEvents({
+      generateFreshData: async () => validateSelectionSources(await generateHistoricalEvents({
         date,
         viewType: viewType as 'today' | 'week',
         category: category as HistoricalEventCategory
-      }),
+      })),
       storeFreshData: async generatedEvents => {
         if (isEmptySelection(generatedEvents)) {
           return;

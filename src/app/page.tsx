@@ -54,7 +54,7 @@ type ClientCacheEntry<T> = {
 };
 
 const CLIENT_CACHE_PREFIX = "chronolens_client_events";
-const CLIENT_CACHE_VERSION = "v6";
+const CLIENT_CACHE_VERSION = "v7";
 const REPORTED_CONTENT_CACHE_KEY = "chronolens_reported_content_v1";
 const HIDDEN_CONTENT_CACHE_KEY = "chronolens_hidden_content_v1";
 const clientCacheMemory = new Map<string, ClientCacheEntry<unknown>>();
@@ -509,6 +509,8 @@ export default function Home() {
   const [hiddenContent, setHiddenContent] = useState<Record<string, boolean>>({});
   const [confirmReportEvent, setConfirmReportEvent] = useState<HistoricalEvent | null>(null);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [openAccordions, setOpenAccordions] = useState<string[]>([]);
+  const [isHeaderShrunken, setIsHeaderShrunken] = useState(false);
   const categories = HISTORICAL_EVENT_CATEGORIES;
   const isMobile = useIsMobile();
   const batchRetryTimerRef = useRef<number | null>(null);
@@ -540,7 +542,9 @@ export default function Home() {
 
     const trigger = pendingAccordionScrollRef.current;
     pendingAccordionScrollRef.current = null;
-    trigger.scrollIntoView({ behavior: "smooth", block: "start" });
+    const headerHeight = document.querySelector("header")?.getBoundingClientRect().height ?? 96;
+    const top = trigger.getBoundingClientRect().top + window.scrollY - headerHeight - 20;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -570,6 +574,61 @@ export default function Home() {
       localStorage.setItem("selectedWeekOffset", String(selectedWeekOffset));
     }
   }, [isTodayView, selectedDayOffset, selectedWeekOffset]);
+
+  useEffect(() => {
+    let scrollEndTimer: number | null = null;
+    let headerFrame: number | null = null;
+
+    const updateHeaderState = () => {
+      const header = document.querySelector("header");
+      const headerHeight = header?.getBoundingClientRect().height ?? 80;
+      const hasAccordionAtHeader = Array.from(document.querySelectorAll("[data-accordion-item]"))
+        .some(item => {
+          const rect = item.getBoundingClientRect();
+          return rect.top < headerHeight + 25 && rect.bottom > headerHeight && rect.height > 0;
+        });
+      const shouldShrink = openAccordions.length > 0
+        && (window.scrollY > 100 || (hasAccordionAtHeader && window.scrollY > 20));
+
+      setIsHeaderShrunken(current => current === shouldShrink ? current : shouldShrink);
+    };
+
+    const handleScroll = () => {
+      document.documentElement.classList.add("is-scrolling");
+
+      if (scrollEndTimer !== null) {
+        window.clearTimeout(scrollEndTimer);
+      }
+
+      scrollEndTimer = window.setTimeout(() => {
+        document.documentElement.classList.remove("is-scrolling");
+        scrollEndTimer = null;
+      }, 120);
+
+      if (headerFrame === null) {
+        headerFrame = window.requestAnimationFrame(() => {
+          headerFrame = null;
+          updateHeaderState();
+        });
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", updateHeaderState, { passive: true });
+    updateHeaderState();
+
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", updateHeaderState);
+      if (scrollEndTimer !== null) {
+        window.clearTimeout(scrollEndTimer);
+      }
+      if (headerFrame !== null) {
+        window.cancelAnimationFrame(headerFrame);
+      }
+      document.documentElement.classList.remove("is-scrolling");
+    };
+  }, [openAccordions.length]);
 
   useEffect(() => {
     const keys = loadReportedContentKeys();
@@ -998,6 +1057,12 @@ export default function Home() {
         Skip to historical events
       </a>
 
+      <div className="ambient-background" aria-hidden="true">
+        <div className="ambient-background__orb ambient-background__orb--indigo" />
+        <div className="ambient-background__orb ambient-background__orb--purple" />
+        <div className="ambient-background__orb ambient-background__orb--cyan" />
+      </div>
+
       {/* Header */}
       <header
         aria-label="ChronoLens header"
@@ -1006,10 +1071,11 @@ export default function Home() {
         onTouchCancel={handleTouchCancel}
         style={isMobile ? { touchAction: "pan-y" } : undefined}
         className={cn(
-        "fixed inset-x-0 top-0 z-40 h-[var(--app-header-height)] border-b border-slate-200/60 pt-[env(safe-area-inset-top)] dark:border-slate-700/60 select-none",
+        "sticky top-0 z-40 border-b border-slate-200/60 bg-white/90 backdrop-blur-lg dark:border-slate-700/60 dark:bg-slate-900/90 select-none transition-[padding] duration-300 ease-out",
+        isHeaderShrunken ? "py-2" : "py-4",
         isTodayView
-          ? "bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900"
-          : "bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 dark:from-slate-900 dark:via-amber-950/40 dark:to-rose-950/40"
+          ? "bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95"
+          : "bg-gradient-to-br from-amber-50/95 via-orange-50/95 to-rose-50/95 dark:from-slate-900/95 dark:via-amber-950/40 dark:to-rose-950/40"
       )}>
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto relative">
@@ -1018,16 +1084,19 @@ export default function Home() {
               <div className="flex items-center space-x-3 w-full justify-between">
                 <div className="flex items-center space-x-3">
                   <div className={cn(
-                    "w-8 h-8 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg"
+                    "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transition-[width,height] duration-300 ease-out",
+                    isHeaderShrunken ? "h-6 w-6" : "h-8 w-8"
                   )}>
                     <svg className={cn(
-                      "w-5 h-5 text-white"
+                      "text-white transition-[width,height] duration-300 ease-out",
+                      isHeaderShrunken ? "h-3.5 w-3.5" : "h-5 w-5"
                     )} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                   <h1 className={cn(
-                    "text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"
+                    "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)] transition-[font-size] duration-300 ease-out",
+                    isHeaderShrunken ? "text-xl" : "text-3xl"
                   )}>
                     ChronoLens
                   </h1>
@@ -1059,12 +1128,12 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <div className="h-11 w-11">
+                    <div className="h-8 w-8">
                       {showBackwardButton ? (
                         <button
                           type="button"
                           onClick={goBackward}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/90"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-label={isTodayView ? "Previous day" : "Previous week"}
                           title={isTodayView ? "Previous day" : "Previous week"}
                         >
@@ -1075,7 +1144,7 @@ export default function Home() {
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/90"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-hidden="true"
                           tabIndex={-1}
                         />
@@ -1084,7 +1153,7 @@ export default function Home() {
 
                     <button 
                       onClick={toggleView}
-                      className="flex min-h-11 items-center gap-1.5 rounded-full border border-white/50 bg-white/90 px-2.5 py-1.5 shadow-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/90"
+                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/70"
                       title={nextViewLabel}
                     >
                       {isTodayView ? (
@@ -1104,12 +1173,12 @@ export default function Home() {
                       )}
                     </button>
 
-                    <div className="h-11 w-11 justify-self-end">
+                    <div className="h-8 w-8 justify-self-end">
                       {canGoForward ? (
                         <button
                           type="button"
                           onClick={goForward}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/90"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-label={isTodayView ? "Next day" : "This week"}
                           title={isTodayView ? "Next day" : "This week"}
                         >
@@ -1120,7 +1189,7 @@ export default function Home() {
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/90"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-hidden="true"
                           tabIndex={-1}
                         />
@@ -1131,7 +1200,10 @@ export default function Home() {
               </div>
               
               {/* Subtitle - Optional, minimal */}
-              <div className="mt-1">
+              <div className={cn(
+                "overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-out",
+                isHeaderShrunken ? "mt-0 max-h-0 opacity-0" : "mt-1 max-h-16 opacity-100"
+              )}>
                 <p className="text-slate-600 dark:text-slate-300 text-base select-none">
                   Discover historical events across {selectedPeriodLabel}
                 </p>
@@ -1142,7 +1214,7 @@ export default function Home() {
       </header>
       
       {/* Main Content */}
-      <main id="main-content" className="container mx-auto px-4 pb-8 pt-[var(--app-header-height)] relative z-10 flex-1">
+      <main id="main-content" className="container mx-auto px-4 pb-8 relative z-10 flex-1" style={{ scrollPaddingTop: "96px" }}>
         <div className="max-w-6xl mx-auto pt-4">
             {shouldShowWarmupBanner && (
             <div className="mb-6 flex justify-center" role="status" aria-live="polite">
@@ -1171,7 +1243,13 @@ export default function Home() {
               </div>
               )}
               <div className={cn("w-full", shouldShowWarmupBanner && "hidden")}>
-              <Accordion type="multiple" className="space-y-4" style={{ overflowAnchor: "none" }}>
+              <Accordion
+                type="multiple"
+                value={openAccordions}
+                onValueChange={setOpenAccordions}
+                className="space-y-4"
+                style={{ overflowAnchor: "none" }}
+              >
               {categories.map((category) => (
                 <AccordionItem 
                   key={category} 
@@ -1181,7 +1259,6 @@ export default function Home() {
                   <Card className="overflow-hidden border-0 bg-white/95 shadow-lg dark:bg-slate-800/95">
                     <AccordionTrigger
                       onClick={handleAccordionTriggerClick}
-                      style={{ scrollMarginTop: "calc(var(--app-header-height) + 1rem)" }}
                       className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180"
                     >
                       <div 

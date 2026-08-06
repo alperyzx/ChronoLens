@@ -83,6 +83,83 @@
 }
 
 @layer components {
+  .ambient-background {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    overflow: hidden;
+    pointer-events: none;
+    contain: strict;
+    background:
+      radial-gradient(circle at 15% 15%, rgb(129 140 248 / 0.12), transparent 28%),
+      radial-gradient(circle at 85% 80%, rgb(56 189 248 / 0.1), transparent 30%);
+  }
+
+  .ambient-background__orb {
+    position: absolute;
+    aspect-ratio: 1;
+    border-radius: 9999px;
+    will-change: transform, opacity;
+    animation: ambient-drift 18s cubic-bezier(0.77, 0, 0.175, 1) infinite;
+  }
+
+  html.is-scrolling .ambient-background__orb {
+    animation-play-state: paused;
+  }
+
+  .ambient-background__orb--indigo {
+    top: 10%;
+    left: 8%;
+    width: min(18vw, 220px);
+    background: radial-gradient(circle at 35% 35%, rgb(99 102 241 / 0.22), transparent 68%);
+  }
+
+  .ambient-background__orb--purple {
+    top: 25%;
+    right: 8%;
+    width: min(14vw, 170px);
+    animation-delay: -6s;
+    animation-duration: 24s;
+    background: radial-gradient(circle at 35% 35%, rgb(168 85 247 / 0.18), transparent 68%);
+  }
+
+  .ambient-background__orb--cyan {
+    bottom: 12%;
+    left: 35%;
+    width: min(11vw, 130px);
+    animation-delay: -11s;
+    animation-duration: 21s;
+    background: radial-gradient(circle at 35% 35%, rgb(34 211 238 / 0.16), transparent 68%);
+  }
+
+  @keyframes ambient-drift {
+    0%, 100% {
+      opacity: 0.55;
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      opacity: 0.85;
+      transform: translate3d(18px, -14px, 0);
+    }
+  }
+
+  .dark .ambient-background {
+    background:
+      radial-gradient(circle at 15% 15%, rgb(99 102 241 / 0.14), transparent 28%),
+      radial-gradient(circle at 85% 80%, rgb(34 211 238 / 0.1), transparent 30%);
+  }
+
+  .dark .ambient-background__orb--indigo {
+    background: radial-gradient(circle at 35% 35%, rgb(129 140 248 / 0.2), transparent 68%);
+  }
+
+  .dark .ambient-background__orb--purple {
+    background: radial-gradient(circle at 35% 35%, rgb(192 132 252 / 0.16), transparent 68%);
+  }
+
+  .dark .ambient-background__orb--cyan {
+    background: radial-gradient(circle at 35% 35%, rgb(103 232 249 / 0.14), transparent 68%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
