@@ -510,7 +510,7 @@ export default function Home() {
   const [confirmReportEvent, setConfirmReportEvent] = useState<HistoricalEvent | null>(null);
   const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [openAccordions, setOpenAccordions] = useState<string[]>([]);
-  const [isHeaderShrunken, setIsHeaderShrunken] = useState(false);
+  const isHeaderShrunken = openAccordions.length > 0;
   const categories = HISTORICAL_EVENT_CATEGORIES;
   const isMobile = useIsMobile();
   const batchRetryTimerRef = useRef<number | null>(null);
@@ -577,21 +577,6 @@ export default function Home() {
 
   useEffect(() => {
     let scrollEndTimer: number | null = null;
-    let headerFrame: number | null = null;
-
-    const updateHeaderState = () => {
-      const header = document.querySelector("header");
-      const headerHeight = header?.getBoundingClientRect().height ?? 80;
-      const hasAccordionAtHeader = Array.from(document.querySelectorAll("[data-accordion-item]"))
-        .some(item => {
-          const rect = item.getBoundingClientRect();
-          return rect.top < headerHeight + 25 && rect.bottom > headerHeight && rect.height > 0;
-        });
-      const shouldShrink = openAccordions.length > 0
-        && (window.scrollY > 100 || (hasAccordionAtHeader && window.scrollY > 20));
-
-      setIsHeaderShrunken(current => current === shouldShrink ? current : shouldShrink);
-    };
 
     const handleScroll = () => {
       document.documentElement.classList.add("is-scrolling");
@@ -604,31 +589,18 @@ export default function Home() {
         document.documentElement.classList.remove("is-scrolling");
         scrollEndTimer = null;
       }, 120);
-
-      if (headerFrame === null) {
-        headerFrame = window.requestAnimationFrame(() => {
-          headerFrame = null;
-          updateHeaderState();
-        });
-      }
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
-    window.addEventListener("resize", updateHeaderState, { passive: true });
-    updateHeaderState();
 
     return () => {
       window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("resize", updateHeaderState);
       if (scrollEndTimer !== null) {
         window.clearTimeout(scrollEndTimer);
       }
-      if (headerFrame !== null) {
-        window.cancelAnimationFrame(headerFrame);
-      }
       document.documentElement.classList.remove("is-scrolling");
     };
-  }, [openAccordions.length]);
+  }, []);
 
   useEffect(() => {
     const keys = loadReportedContentKeys();
@@ -1071,7 +1043,7 @@ export default function Home() {
         onTouchCancel={handleTouchCancel}
         style={isMobile ? { touchAction: "pan-y" } : undefined}
         className={cn(
-        "sticky top-0 z-40 border-b border-slate-200/60 bg-white/90 backdrop-blur-lg dark:border-slate-700/60 dark:bg-slate-900/90 select-none transition-[padding] duration-300 ease-out",
+        "sticky top-0 z-40 border-b border-slate-200/60 bg-white/90 dark:border-slate-700/60 dark:bg-slate-900/90 select-none transition-[padding] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
         isHeaderShrunken ? "py-2" : "py-4",
         isTodayView
           ? "bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95"
@@ -1084,22 +1056,27 @@ export default function Home() {
               <div className="flex items-center space-x-3 w-full justify-between">
                 <div className="flex items-center space-x-3">
                   <div className={cn(
-                    "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transition-[width,height] duration-300 ease-out",
+                    "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transition-[width,height] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
                     isHeaderShrunken ? "h-6 w-6" : "h-8 w-8"
                   )}>
                     <svg className={cn(
-                      "text-white transition-[width,height] duration-300 ease-out",
+                      "text-white transition-[width,height] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
                       isHeaderShrunken ? "h-3.5 w-3.5" : "h-5 w-5"
                     )} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                   <h1 className={cn(
-                    "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)] transition-[font-size] duration-300 ease-out",
+                    "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)] transition-[font-size] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
                     isHeaderShrunken ? "text-xl" : "text-3xl"
                   )}>
                     ChronoLens
                   </h1>
+                  {isHeaderShrunken && (
+                    <span className="inline-flex items-center whitespace-nowrap rounded-full border border-slate-200/70 bg-white/80 px-2.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm dark:border-slate-700/70 dark:bg-slate-800/80 dark:text-slate-300">
+                      {selectedPeriodLabel}
+                    </span>
+                  )}
                 </div>
                 
                 {isMobile ? (
@@ -1133,7 +1110,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={goBackward}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-label={isTodayView ? "Previous day" : "Previous week"}
                           title={isTodayView ? "Previous day" : "Previous week"}
                         >
@@ -1144,7 +1121,7 @@ export default function Home() {
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-hidden="true"
                           tabIndex={-1}
                         />
@@ -1153,7 +1130,7 @@ export default function Home() {
 
                     <button 
                       onClick={toggleView}
-                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/70"
+                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/70"
                       title={nextViewLabel}
                     >
                       {isTodayView ? (
@@ -1178,7 +1155,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={goForward}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-label={isTodayView ? "Next day" : "This week"}
                           title={isTodayView ? "Next day" : "This week"}
                         >
@@ -1189,7 +1166,7 @@ export default function Home() {
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-hidden="true"
                           tabIndex={-1}
                         />
@@ -1201,7 +1178,7 @@ export default function Home() {
               
               {/* Subtitle - Optional, minimal */}
               <div className={cn(
-                "overflow-hidden transition-[max-height,opacity,margin] duration-300 ease-out",
+                "overflow-hidden transition-[max-height,opacity,margin] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
                 isHeaderShrunken ? "mt-0 max-h-0 opacity-0" : "mt-1 max-h-16 opacity-100"
               )}>
                 <p className="text-slate-600 dark:text-slate-300 text-base select-none">
@@ -1341,7 +1318,7 @@ export default function Home() {
                                             onClick={() => showReportConfirmation(event)}
                                             disabled={isReporting || isReported}
                                             aria-label={isReported ? "Already reported" : "Report inappropriate content"}
-                                            className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-slate-200 text-slate-500 shadow-sm transition-colors duration-150 hover:bg-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-300"
+                                            className="flex h-7 w-7 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-slate-200 text-slate-500 shadow-sm transition-colors duration-150 hover:bg-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-300"
                                             title={isReported ? "Already reported by you" : "Report inappropriate content"}
                                           >
                                             {isReporting ? (
@@ -1364,7 +1341,7 @@ export default function Home() {
                                           <button
                                             onClick={() => shareContent(event)}
                                             aria-label="Share this historical event"
-                                            className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                                            className="flex h-7 w-7 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                                             title="Share this historical event"
                                           >
                                             <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1379,7 +1356,7 @@ export default function Home() {
                                               target="_blank" 
                                               rel="noopener noreferrer" 
                                               aria-label={`View source for ${event.title} (opens in new tab)`}
-                                              className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                                              className="flex h-7 w-7 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                                               title={`View source for ${event.title} (opens in new tab)`}
                                             >
                                               <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1387,7 +1364,12 @@ export default function Home() {
                                               </svg>
                                             </a>
                                           ) : (
-                                            <div className="w-7 h-7 bg-gradient-to-br from-slate-400 to-slate-500 rounded-lg flex items-center justify-center shadow-md opacity-50">
+                                            <div
+                                              role="img"
+                                              aria-label="Source unavailable"
+                                              title="Source unavailable"
+                                              className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-slate-400 to-slate-500 shadow-md opacity-50"
+                                            >
                                               <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                               </svg>
