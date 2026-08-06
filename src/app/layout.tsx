@@ -46,9 +46,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning={true}>
       <head>
-        <Script id="theme-init" strategy="beforeInteractive">
-          {`document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches);`}
-        </Script>
+        <style>{`html{background:#fafafa}@media(prefers-color-scheme:dark){html{background:#020617}}`}</style>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `document.documentElement.classList.toggle('dark',window.matchMedia('(prefers-color-scheme:dark)').matches)`,
+          }}
+        />
         {/* Google Tag Manager */}
         <Script
           id="google-tag-manager"
