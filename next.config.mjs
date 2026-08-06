@@ -1,6 +1,9 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  turbopack: {
+    root: process.cwd(),
+  },
   webpack: (config, { isServer }) => {
     // Fix for the 'require.extensions' error with handlebars
     config.module.rules.push({

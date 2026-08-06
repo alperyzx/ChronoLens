@@ -237,7 +237,7 @@ export default function ContentAdmin() {
         </div>
 
         <div className="grid gap-8 lg:grid-cols-3">
-          <Card className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-0 shadow-xl">
+          <Card className="bg-white/95 dark:bg-slate-800/95 border-0 shadow-xl">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -324,7 +324,7 @@ export default function ContentAdmin() {
           </CardContent>
         </Card>
 
-          <Card className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-0 shadow-xl">
+          <Card className="bg-white/95 dark:bg-slate-800/95 border-0 shadow-xl">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -404,7 +404,7 @@ export default function ContentAdmin() {
             </CardContent>
           </Card>
 
-          <Card className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-0 shadow-xl">
+          <Card className="bg-white/95 dark:bg-slate-800/95 border-0 shadow-xl">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -457,7 +457,7 @@ export default function ContentAdmin() {
         </Card>
       </div>
 
-      <Card className="mt-6 bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-0 shadow-xl">
+        <Card className="mt-6 bg-white/95 dark:bg-slate-800/95 border-0 shadow-xl">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <svg className="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -75,7 +75,7 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
           </div>
 
           <div className="w-full max-w-md px-4">
-            <Card className="bg-white/70 dark:bg-slate-800/70 backdrop-blur-sm border-0 shadow-xl">
+            <Card className="bg-white/95 dark:bg-slate-800/95 border-0 shadow-xl">
               <CardHeader className="space-y-2">
                 <div className="flex justify-center mb-4">
                   <div className="w-12 h-12 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg">

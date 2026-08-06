@@ -1,16 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, type TouchEvent } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect, useRef, useMemo, type AnimationEvent, type MouseEvent, type TouchEvent } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Footer } from "@/components/navigation";
-import { useHeaderShrink } from "@/hooks/use-header-shrink";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from "@/lib/historical-event-categories";
@@ -24,7 +21,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
 // Define types for our events
@@ -295,7 +291,7 @@ function setClientCache<T>(key: string, data: T, viewType: 'today' | 'week', rev
   }
 }
 
-async function getReportCacheRevision(date: string, viewType: 'today' | 'week', category?: string): Promise<string | undefined> {
+async function getReportCacheRevision(date: string, viewType: 'today' | 'week', category?: string, signal?: AbortSignal): Promise<string | undefined> {
   const params = new URLSearchParams({
     date,
     viewType,
@@ -307,7 +303,7 @@ async function getReportCacheRevision(date: string, viewType: 'today' | 'week', 
   }
 
   try {
-    const response = await fetch(`/api/historical-events?${params.toString()}`);
+    const response = await fetch(`/api/historical-events?${params.toString()}`, { signal });
     if (!response.ok) {
       return undefined;
     }
@@ -365,9 +361,6 @@ const categoryIcons = {
   ),
 };
 
-// Add the missing link icon definition
-const linkIcon = <Icons.edit className="h-3 w-3 mr-1" />; // Using the edit icon as a replacement
-
 // Category Background Gradients - Modern themed gradients
 const categoryBackgrounds = {
   Sociology: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
@@ -380,10 +373,10 @@ const categoryBackgrounds = {
   Literature: "linear-gradient(135deg, #5f27cd 0%, #341f97 100%)",
 };
 
-async function getHistoricalEventsForCategory(category: string, isTodayView: boolean, dateString: string): Promise<{events: HistoricalEventCategoryPayload, cached: boolean}> {
+async function getHistoricalEventsForCategory(category: string, isTodayView: boolean, dateString: string, signal?: AbortSignal): Promise<{events: HistoricalEventCategoryPayload, cached: boolean}> {
   const viewType = isTodayView ? 'today' : 'week';
   const clientCacheKey = getClientCacheKey('single', viewType, dateString, category);
-  const reportCacheRevision = await getReportCacheRevision(dateString, viewType, category);
+  const reportCacheRevision = await getReportCacheRevision(dateString, viewType, category, signal);
 
   const cachedClientData = getClientCache<HistoricalEventCategoryPayload>(clientCacheKey);
   if (cachedClientData) {
@@ -404,7 +397,7 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
   
   try {
     // Call our cached API endpoint instead of direct AI call
-    const response = await fetch(`/api/historical-events?date=${dateString}&category=${category}&viewType=${viewType}`);
+    const response = await fetch(`/api/historical-events?date=${dateString}&category=${category}&viewType=${viewType}`, { signal });
     
     if (!response.ok) {
       throw new Error(`API request failed: ${response.status}`);
@@ -441,10 +434,10 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
   }
 }
 
-async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateString: string): Promise<{eventsByCategory: HistoricalEventsByCategory, cached: boolean}> {
+async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateString: string, signal?: AbortSignal, knownReportCacheRevision?: string): Promise<{eventsByCategory: HistoricalEventsByCategory, cached: boolean}> {
   const viewType = isTodayView ? 'today' : 'week';
   const clientCacheKey = getClientCacheKey('batch', viewType, dateString);
-  const reportCacheRevision = await getReportCacheRevision(dateString, viewType);
+  const reportCacheRevision = knownReportCacheRevision ?? await getReportCacheRevision(dateString, viewType, undefined, signal);
 
   const cachedClientData = getClientCache<HistoricalEventsByCategory>(clientCacheKey);
   if (cachedClientData) {
@@ -463,7 +456,7 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateStr
     }
   }
 
-  const response = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}`);
+  const response = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}`, { signal });
 
   if (!response.ok) {
     throw new Error(`API request failed: ${response.status}`);
@@ -511,22 +504,18 @@ export default function Home() {
   const [historicalEvents, setHistoricalEvents] = useState<CategoryEvents>({});
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
   const [showGeminiWarmup, setShowGeminiWarmup] = useState(false);
-  const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
-  const [openAccordions, setOpenAccordions] = useState<string[]>([]);
   const [reportingContent, setReportingContent] = useState<Record<string, boolean>>({});
   const [reportedContent, setReportedContent] = useState<Record<string, boolean>>({});
   const [hiddenContent, setHiddenContent] = useState<Record<string, boolean>>({});
   const [confirmReportEvent, setConfirmReportEvent] = useState<HistoricalEvent | null>(null);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const categories = HISTORICAL_EVENT_CATEGORIES;
-  // Use a simpler logic: expand header when all accordions are closed
-  const baseHeaderShrunken = useHeaderShrink(100);
-  const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
   const isMobile = useIsMobile();
-  const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const batchRetryTimerRef = useRef<number | null>(null);
   const swipeStartXRef = useRef<number | null>(null);
   const swipeStartYRef = useRef<number | null>(null);
-  const [warmupCategoryIndex, setWarmupCategoryIndex] = useState(0);
+  const batchRequestRef = useRef<AbortController | null>(null);
+  const pendingAccordionScrollRef = useRef<HTMLButtonElement | null>(null);
   const { toast } = useToast();
 
   const clearBatchRetryTimer = () => {
@@ -536,34 +525,25 @@ export default function Home() {
     }
   };
 
-  // Handle accordion value changes and smooth scroll
-  const handleAccordionChange = (value: string[]) => {
-    const newlyOpened = value.filter(v => !openAccordions.includes(v));
-    setOpenAccordions(value);
-    
-    // If a new accordion was opened, scroll it to the top
-    if (newlyOpened.length > 0) {
-      const newAccordion = newlyOpened[0];
-      const element = accordionRefs.current[newAccordion];
-      if (element) {
-        // Add a small delay to allow the accordion to open
-        setTimeout(() => {
-          const rect = element.getBoundingClientRect();
-          const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-          // Dynamic header height based on shrink state
-          const headerHeight = isHeaderShrunken ? 64 : 96; // py-2 = 16px*2, py-4 = 24px*2, plus content
-          const padding = 20; // Additional spacing
-          const targetPosition = rect.top + scrollTop - headerHeight - padding;
-          
-          window.scrollTo({
-            top: Math.max(0, targetPosition), // Ensure we don't scroll to negative position
-            behavior: 'smooth'
-          });
-        }, 150);
-      }
+  const handleAccordionTriggerClick = (event: MouseEvent<HTMLButtonElement>) => {
+    if (event.currentTarget.dataset.state !== "closed") {
+      return;
     }
+
+    pendingAccordionScrollRef.current = event.currentTarget;
   };
-  
+
+  const handleAccordionContentAnimationEnd = (event: AnimationEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget || !pendingAccordionScrollRef.current) {
+      return;
+    }
+
+    const trigger = pendingAccordionScrollRef.current;
+    pendingAccordionScrollRef.current = null;
+    const top = trigger.getBoundingClientRect().top + window.scrollY - 112;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  };
+
   useEffect(() => {
     // Load saved view preference
     if (typeof window !== "undefined") {
@@ -580,6 +560,7 @@ export default function Home() {
         setSelectedWeekOffset(Number(storedWeekOffset) || 0);
       }
     }
+    setPreferencesLoaded(true);
   }, []);
 
   useEffect(() => {
@@ -619,17 +600,22 @@ export default function Home() {
   useEffect(() => {
     return () => {
       clearBatchRetryTimer();
+      batchRequestRef.current?.abort();
     };
   }, []);
 
   const shouldShowWarmupBanner = showGeminiWarmup;
+
+  const hiddenKeys = useMemo(
+    () => new Set(Object.keys(hiddenContent).filter(key => hiddenContent[key])),
+    [hiddenContent]
+  );
 
   const getRenderableEvents = (selection?: HistoricalEventCategoryPayload): HistoricalEvent[] => {
     if (!selection) {
       return [];
     }
 
-    const hiddenKeys = new Set(Object.keys(hiddenContent).filter(key => hiddenContent[key]));
     const sourceEvents = Array.isArray(selection.visibleEvents) && selection.visibleEvents.length > 0
       ? selection.visibleEvents
       : selection.events.slice(0, selection.count);
@@ -637,34 +623,15 @@ export default function Home() {
     return sourceEvents.filter(event => !hiddenKeys.has(getEventReportKey(event)));
   };
 
-  useEffect(() => {
-    if (!shouldShowWarmupBanner) {
-      setWarmupCategoryIndex(0);
-      return;
-    }
-
-      const intervalId = window.setInterval(() => {
-      setWarmupCategoryIndex(currentIndex => (currentIndex + 1) % categories.length);
-      }, 2000);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [shouldShowWarmupBanner, categories.length]);
-
   const fetchCategoryEvents = async (category: string) => {
     setLoadingCategories(prev => ({ ...prev, [category]: true }));
     
     try {
       const dateString = getSelectedPeriodDateString(isTodayView, selectedDayOffset, selectedWeekOffset);
-      const {events, cached} = await getHistoricalEventsForCategory(category, isTodayView, dateString);
+      const {events} = await getHistoricalEventsForCategory(category, isTodayView, dateString);
       setHistoricalEvents(prev => ({
         ...prev,
         [category]: events
-      }));
-      setCacheStatus(prev => ({
-        ...prev,
-        [category]: cached
       }));
     } catch (error) {
       console.error(`Failed to fetch events for ${category}`, error);
@@ -674,25 +641,33 @@ export default function Home() {
   };
 
   const fetchAllEvents = async () => {
+    batchRequestRef.current?.abort();
+    const controller = new AbortController();
+    batchRequestRef.current = controller;
     const viewType = isTodayView ? 'today' : 'week';
     const dateString = getSelectedPeriodDateString(isTodayView, selectedDayOffset, selectedWeekOffset);
     const clientCacheKey = getClientCacheKey('batch', viewType, dateString);
     const hasClientCache = Boolean(getClientCache<HistoricalEventsByCategory>(clientCacheKey));
     let shouldKeepWarmupVisible = false;
+    let knownReportCacheRevision: string | undefined;
 
     clearBatchRetryTimer();
 
     if (!hasClientCache) {
       try {
-        const metadataResponse = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}&metadataOnly=1`);
+        const metadataResponse = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}&metadataOnly=1`, { signal: controller.signal });
         if (metadataResponse.ok) {
           const metadata = await metadataResponse.json();
+          knownReportCacheRevision = metadata?.reportCacheRevision;
           if (metadata?.generationRequired === true) {
             setShowGeminiWarmup(true);
             shouldKeepWarmupVisible = true;
           }
         }
       } catch (metadataError) {
+        if (controller.signal.aborted) {
+          return;
+        }
         console.warn('Failed to probe cache status before historical event fetch:', metadataError);
       }
     }
@@ -704,24 +679,19 @@ export default function Home() {
     });
     setLoadingCategories(initialLoadingState);
     
-    // Reset cache status
-    setCacheStatus({});
-    
     try {
-      const {eventsByCategory, cached} = await getHistoricalEventsForAllCategories(isTodayView, dateString);
+      const {eventsByCategory, cached} = await getHistoricalEventsForAllCategories(
+        isTodayView,
+        dateString,
+        controller.signal,
+        knownReportCacheRevision
+      );
       const hasEvents = hasAnyHistoricalEventsByCategory(eventsByCategory);
 
       setHistoricalEvents(prev => ({
         ...prev,
         ...eventsByCategory,
       }));
-
-      setCacheStatus(
-        categories.reduce((accumulator, category) => {
-          accumulator[category] = cached;
-          return accumulator;
-        }, {} as Record<string, boolean>)
-      );
 
       if (!cached && !hasEvents && shouldKeepWarmupVisible) {
         batchRetryTimerRef.current = window.setTimeout(() => {
@@ -732,8 +702,15 @@ export default function Home() {
 
       shouldKeepWarmupVisible = false;
     } catch (error) {
+      if (controller.signal.aborted) {
+        return;
+      }
       console.error('Failed to fetch all categories', error);
     } finally {
+      if (batchRequestRef.current !== controller || controller.signal.aborted) {
+        return;
+      }
+
       if (!shouldKeepWarmupVisible) {
         setShowGeminiWarmup(false);
       }
@@ -750,15 +727,16 @@ export default function Home() {
   };
 
   useEffect(() => {
-    fetchAllEvents();
-  }, [isTodayView, selectedDayOffset, selectedWeekOffset]);
+    if (preferencesLoaded) {
+      void fetchAllEvents();
+    }
+  }, [preferencesLoaded, isTodayView, selectedDayOffset, selectedWeekOffset]);
 
   const toggleView = () => {
     clearBatchRetryTimer();
     setIsTodayView(!isTodayView);
   };
 
-  const activeViewLabel = isTodayView ? "Today View" : "Week View";
   const nextViewLabel = isTodayView ? "Switch to Week View" : "Switch to Today View";
   const selectedPeriodLabel = isTodayView
     ? formatMonthDay(getSelectedPeriodDateString(true, selectedDayOffset, selectedWeekOffset))
@@ -1009,7 +987,7 @@ export default function Home() {
   return (
     <div
       className={cn(
-        "relative min-h-screen antialiased flex flex-col transition-colors duration-700",
+        "relative min-h-screen antialiased flex flex-col",
         isTodayView
           ? "bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900"
           : "bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 dark:from-slate-900 dark:via-amber-950/40 dark:to-rose-950/40"
@@ -1019,130 +997,12 @@ export default function Home() {
       onTouchEnd={handleTouchEnd}
       onTouchCancel={handleTouchCancel}
     >
-      {/* Modern animated background */}
-      <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
-        <div
-          className={cn(
-            "absolute inset-0 transition-opacity duration-700",
-            isTodayView ? "opacity-100" : "opacity-0"
-          )}
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_120%,rgba(120,119,198,0.15),rgba(255,255,255,0))]"></div>
-        </div>
-        <div
-          className={cn(
-            "absolute inset-0 transition-opacity duration-700",
-            isTodayView ? "opacity-0" : "opacity-100"
-          )}
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_20%,rgba(251,191,36,0.18),rgba(255,255,255,0)),radial-gradient(circle_at_80%_85%,rgba(244,63,94,0.16),rgba(255,255,255,0))]"></div>
-        </div>
-        
-        {/* Content-aligned floating geometric shapes */}
-        <div className="container mx-auto px-4 h-full relative">
-          <div className="max-w-6xl mx-auto h-full relative">
-            {/* Large floating circles */}
-            <div className="absolute top-20 left-8 w-32 h-32 bg-gradient-to-br from-indigo-400/20 to-blue-500/20 rounded-full animate-pulse opacity-80">
-              <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '20s'}}>
-                <div className="w-4 h-4 bg-indigo-400/40 rounded-full absolute top-2 left-1/2 transform -translate-x-1/2"></div>
-              </div>
-            </div>
-            
-            <div className="absolute top-32 right-8 w-24 h-24 bg-gradient-to-br from-purple-400/20 to-pink-500/20 rounded-full animate-pulse opacity-70" style={{animationDelay: '2s'}}>
-              <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '25s', animationDirection: 'reverse'}}>
-                <div className="w-3 h-3 bg-purple-400/40 rounded-full absolute bottom-2 right-2"></div>
-              </div>
-            </div>
-            
-            <div className="absolute bottom-40 left-1/4 w-20 h-20 bg-gradient-to-br from-cyan-400/20 to-teal-500/20 rounded-full animate-pulse opacity-60" style={{animationDelay: '4s'}}>
-              <div className="w-full h-full rounded-full animate-spin" style={{animationDuration: '30s'}}>
-                <div className="w-2 h-2 bg-cyan-400/40 rounded-full absolute top-1 left-1"></div>
-              </div>
-            </div>
-            
-            {/* Floating squares and diamonds */}
-            <div className="absolute top-1/3 right-1/3 w-8 h-8 bg-gradient-to-br from-emerald-400/25 to-green-500/25 rotate-45 animate-bounce opacity-50" style={{animationDuration: '8s', animationDelay: '1s'}}></div>
-            
-            <div className="absolute bottom-1/3 right-1/4 w-6 h-6 bg-gradient-to-br from-amber-400/25 to-orange-500/25 rotate-12 animate-bounce opacity-45" style={{animationDuration: '12s', animationDelay: '3s'}}></div>
-            
-            <div className="absolute top-2/3 left-1/3 w-10 h-10 bg-gradient-to-br from-rose-400/25 to-pink-500/25 rotate-45 animate-bounce opacity-55" style={{animationDuration: '10s', animationDelay: '2s'}}></div>
-            
-            {/* Small floating dots */}
-            <div className="absolute top-16 right-1/2 w-2 h-2 bg-indigo-400/50 rounded-full animate-ping opacity-80" style={{animationDelay: '0s', animationDuration: '4s'}}></div>
-            <div className="absolute top-1/2 left-16 w-1.5 h-1.5 bg-purple-400/50 rounded-full animate-ping opacity-70" style={{animationDelay: '1s', animationDuration: '5s'}}></div>
-            <div className="absolute bottom-1/4 right-16 w-3 h-3 bg-cyan-400/50 rounded-full animate-ping opacity-60" style={{animationDelay: '2s', animationDuration: '6s'}}></div>
-            <div className="absolute top-3/4 left-1/2 w-2 h-2 bg-emerald-400/50 rounded-full animate-ping opacity-65" style={{animationDelay: '3s', animationDuration: '4.5s'}}></div>
-            <div className="absolute top-40 right-1/3 w-1 h-1 bg-amber-400/50 rounded-full animate-ping opacity-55" style={{animationDelay: '1.5s', animationDuration: '7s'}}></div>
-            
-            {/* Subtle moving lines aligned with content */}
-            <div className="absolute top-1/4 left-0 w-px h-32 bg-gradient-to-b from-transparent via-indigo-400/40 to-transparent opacity-50 animate-pulse" style={{animationDelay: '2s'}}></div>
-            <div className="absolute top-1/2 right-0 w-px h-24 bg-gradient-to-b from-transparent via-purple-400/40 to-transparent opacity-45 animate-pulse" style={{animationDelay: '4s'}}></div>
-            <div className="absolute bottom-1/3 left-1/2 w-24 h-px bg-gradient-to-r from-transparent via-cyan-400/40 to-transparent opacity-40 animate-pulse" style={{animationDelay: '1s'}}></div>
-          </div>
-        </div>
-        
-        {/* SVG animations aligned with content width */}
-        <div className="container mx-auto px-4 h-full relative">
-          <div className="max-w-6xl mx-auto h-full relative">
-            <svg className="w-full h-full opacity-40" viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid slice">
-              <defs>
-                <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style={{stopColor:"rgb(99, 102, 241)", stopOpacity:0.25}} />
-                  <stop offset="100%" style={{stopColor:"rgb(14, 165, 233)", stopOpacity:0.25}} />
-                </linearGradient>
-                <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style={{stopColor:"rgb(147, 51, 234)", stopOpacity:0.2}} />
-                  <stop offset="100%" style={{stopColor:"rgb(219, 39, 119)", stopOpacity:0.2}} />
-                </linearGradient>
-                <linearGradient id="grad3" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style={{stopColor:"rgb(6, 182, 212)", stopOpacity:0.2}} />
-                  <stop offset="100%" style={{stopColor:"rgb(16, 185, 129)", stopOpacity:0.2}} />
-                </linearGradient>
-              </defs>
-              
-              {/* Main floating orbs positioned within content bounds */}
-              <circle cx="100" cy="80" r="50" fill="url(#grad1)" className="animate-pulse">
-                <animate attributeName="r" values="30;50;30" dur="4s" repeatCount="indefinite"/>
-                <animateTransform attributeName="transform" type="translate" values="0,0; 20,10; 0,0" dur="15s" repeatCount="indefinite"/>
-              </circle>
-              
-              <circle cx="1000" cy="120" r="40" fill="url(#grad2)" className="animate-pulse" style={{animationDelay: '1s'}}>
-                <animate attributeName="r" values="25;40;25" dur="5s" repeatCount="indefinite"/>
-                <animateTransform attributeName="transform" type="translate" values="0,0; -15,25; 0,0" dur="18s" repeatCount="indefinite"/>
-              </circle>
-              
-              <circle cx="200" cy="600" r="35" fill="url(#grad1)" className="animate-pulse" style={{animationDelay: '2s'}}>
-                <animate attributeName="r" values="20;35;20" dur="3.5s" repeatCount="indefinite"/>
-                <animateTransform attributeName="transform" type="translate" values="0,0; 30,-10; 0,0" dur="20s" repeatCount="indefinite"/>
-              </circle>
-              
-              {/* Additional smaller elements within content area */}
-              <circle cx="600" cy="300" r="25" fill="url(#grad3)" className="animate-pulse" style={{animationDelay: '3s'}}>
-                <animate attributeName="r" values="15;25;15" dur="6s" repeatCount="indefinite"/>
-                <animateTransform attributeName="transform" type="translate" values="0,0; -20,15; 0,0" dur="22s" repeatCount="indefinite"/>
-              </circle>
-              
-              <circle cx="300" cy="200" r="20" fill="url(#grad2)" className="animate-pulse" style={{animationDelay: '4s'}}>
-                <animate attributeName="r" values="10;20;10" dur="4.5s" repeatCount="indefinite"/>
-                <animateTransform attributeName="transform" type="translate" values="0,0; 25,-20; 0,0" dur="25s" repeatCount="indefinite"/>
-              </circle>
-              
-              <circle cx="900" cy="500" r="30" fill="url(#grad3)" className="animate-pulse" style={{animationDelay: '5s'}}>
-                <animate attributeName="r" values="18;30;18" dur="5.5s" repeatCount="indefinite"/>
-                <animateTransform attributeName="transform" type="translate" values="0,0; -10,20; 0,0" dur="16s" repeatCount="indefinite"/>
-              </circle>
-            </svg>
-          </div>
-        </div>
-      </div>
-      
-      {/* Header - Sticky with Responsive Design */}
+      {/* Header */}
       <div className={cn(
-        "sticky top-0 z-40 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out will-change-padding select-none",
+        "fixed inset-x-0 top-0 z-40 h-24 border-b border-slate-200/60 dark:border-slate-700/60 select-none",
         isTodayView
-          ? "bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95"
-          : "bg-gradient-to-br from-amber-50/95 via-orange-50/95 to-rose-50/95 dark:from-slate-900/95 dark:via-amber-950/40 dark:to-rose-950/40",
-        isHeaderShrunken ? "py-2" : "py-4"
+          ? "bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900"
+          : "bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 dark:from-slate-900 dark:via-amber-950/40 dark:to-rose-950/40"
       )}>
         <div className="container mx-auto px-4">
           <div className="max-w-6xl mx-auto relative">
@@ -1151,46 +1011,38 @@ export default function Home() {
               <div className="flex items-center space-x-3 w-full justify-between">
                 <div className="flex items-center space-x-3">
                   <div className={cn(
-                    "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 ease-in-out",
-                    isHeaderShrunken ? "w-6 h-6" : "w-8 h-8"
+                    "w-8 h-8 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg"
                   )}>
                     <svg className={cn(
-                      "text-white transition-all duration-300 ease-in-out",
-                      isHeaderShrunken ? "w-3.5 h-3.5" : "w-5 h-5"
+                      "w-5 h-5 text-white"
                     )} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                   <h1 className={cn(
-                    "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent transition-all duration-300 ease-in-out drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]",
-                    isHeaderShrunken ? "text-xl" : "text-3xl"
+                    "text-3xl font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]"
                   )}>
                     ChronoLens
                   </h1>
-                  {isHeaderShrunken && (
-                    <span className="inline-flex items-center whitespace-nowrap rounded-full border border-slate-200/70 bg-white/70 px-2.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/70 dark:text-slate-300">
-                      {selectedPeriodLabel}
-                    </span>
-                  )}
                 </div>
                 
                 {isMobile ? (
                   <div className="flex justify-end flex-shrink-0">
                     <button
                       onClick={toggleView}
-                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-3 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
+                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/90 px-3 py-1.5 shadow-sm transition-colors duration-150 hover:bg-white dark:border-slate-700/60 dark:bg-slate-800/90"
                       title={nextViewLabel}
                     >
                       {isTodayView ? (
                         <>
-                          <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
                           </svg>
                           <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
                         </>
                       ) : (
                         <>
-                          <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
                           </svg>
                           <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
@@ -1205,7 +1057,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={goBackward}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm transition-colors duration-150 hover:bg-white dark:border-slate-700/60 dark:bg-slate-800/90"
                           aria-label={isTodayView ? "Previous day" : "Previous week"}
                           title={isTodayView ? "Previous day" : "Previous week"}
                         >
@@ -1216,7 +1068,7 @@ export default function Home() {
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/90"
                           aria-hidden="true"
                           tabIndex={-1}
                         />
@@ -1225,19 +1077,19 @@ export default function Home() {
 
                     <button 
                       onClick={toggleView}
-                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
+                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/90 px-2.5 py-1.5 shadow-sm transition-colors duration-150 hover:bg-white dark:border-slate-700/60 dark:bg-slate-800/90"
                       title={nextViewLabel}
                     >
                       {isTodayView ? (
                         <>
-                          <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-amber-500" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
                           </svg>
                           <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
                         </>
                       ) : (
                         <>
-                          <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-blue-500" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
                           </svg>
                           <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
@@ -1250,7 +1102,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={goForward}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm transition-colors duration-150 hover:bg-white dark:border-slate-700/60 dark:bg-slate-800/90"
                           aria-label={isTodayView ? "Next day" : "This week"}
                           title={isTodayView ? "Next day" : "This week"}
                         >
@@ -1261,7 +1113,7 @@ export default function Home() {
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/90"
                           aria-hidden="true"
                           tabIndex={-1}
                         />
@@ -1272,10 +1124,7 @@ export default function Home() {
               </div>
               
               {/* Subtitle - Optional, minimal */}
-              <div className={cn(
-                "overflow-hidden transition-all duration-300 ease-in-out",
-                isHeaderShrunken ? "max-h-0 opacity-0 mt-0" : "max-h-16 opacity-100 mt-1"
-              )}>
+              <div className="mt-1">
                 <p className="text-slate-600 dark:text-slate-300 text-base select-none">
                   Discover historical events across {selectedPeriodLabel}
                 </p>
@@ -1286,20 +1135,15 @@ export default function Home() {
       </div>
       
       {/* Main Content */}
-      <div className="container mx-auto px-4 pb-8 relative z-10 flex-1" style={{ scrollPaddingTop: '96px' }}>
+      <div className="container mx-auto px-4 pb-8 pt-24 relative z-10 flex-1">
         <div className="max-w-6xl mx-auto pt-4">
             {shouldShowWarmupBanner && (
             <div className="mb-6 flex justify-center" role="status" aria-live="polite">
-              <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/15 bg-white/15 px-6 py-8 text-center shadow-[0_24px_90px_rgba(15,23,42,0.18)] backdrop-blur-xl dark:bg-slate-950/35">
+              <div className="relative w-full max-w-2xl overflow-hidden rounded-[2rem] border border-white/60 bg-white/90 px-6 py-8 text-center shadow-lg dark:border-white/20 dark:bg-slate-950/90">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(96,165,250,0.18),transparent_40%),radial-gradient(circle_at_bottom_right,rgba(244,114,182,0.14),transparent_32%),radial-gradient(circle_at_bottom_left,rgba(250,204,21,0.14),transparent_28%)]" />
                 <div className="relative flex flex-col items-center gap-5">
-                  {/* Gemini spinner */}
-                  <div className="relative flex h-28 w-28 items-center justify-center">
-                    <div className="absolute inset-0 rounded-full border border-slate-300/60 animate-[spin_14s_linear_infinite] dark:border-indigo-400/25" />
-                    <div className="absolute inset-4 rounded-full border border-sky-400/45 animate-[spin_10s_linear_infinite_reverse] dark:border-cyan-300/35" />
-                    <div className="absolute inset-8 rounded-full border border-fuchsia-400/30 animate-pulse dark:border-fuchsia-300/25" />
-                    <div className="absolute inset-11 rounded-full bg-gradient-to-br from-white/30 via-cyan-200/30 to-fuchsia-200/30 blur-xl" />
-                    <Icons.spinner className="relative h-11 w-11 text-slate-700 animate-spin drop-shadow-[0_0_18px_rgba(255,255,255,0.35)] dark:text-white dark:drop-shadow-[0_0_18px_rgba(255,255,255,0.6)]" />
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full border border-slate-300/70 bg-white/70 dark:border-white/20 dark:bg-white/10">
+                    <Icons.spinner className="h-8 w-8 animate-spin text-indigo-600 dark:text-cyan-300" />
                   </div>
 
                   {/* Title and description */}
@@ -1315,54 +1159,23 @@ export default function Home() {
                     </p>
                   </div>
 
-                  {/* Bouncing dots */}
-                  <div className="flex w-full max-w-md items-end justify-center gap-2 pt-1" aria-hidden="true">
-                    <span className="h-3 w-3 rounded-full bg-cyan-300 animate-bounce [animation-delay:-0.3s]" />
-                    <span className="h-5 w-3 rounded-full bg-sky-300 animate-bounce [animation-delay:-0.15s]" />
-                    <span className="h-7 w-3 rounded-full bg-fuchsia-300 animate-bounce" />
-                    <span className="h-4 w-3 rounded-full bg-amber-300 animate-bounce [animation-delay:-0.2s]" />
-                    <span className="h-3 w-3 rounded-full bg-emerald-300 animate-bounce [animation-delay:-0.35s]" />
-                  </div>
-
-                  {/* Category carousel */}
-                  <div className="flex w-full items-center justify-center gap-3 pt-1" aria-live="polite" aria-atomic="true">
-                    <div className="relative h-8 w-[11rem] overflow-hidden rounded-full border border-slate-300/60 bg-white/70 shadow-sm dark:border-white/10 dark:bg-white/10">
-                      <div
-                        className="flex h-full transition-transform duration-500 ease-in-out"
-                        style={{ transform: `translateX(-${warmupCategoryIndex * 100}%)` }}
-                      >
-                        {categories.map((cat) => (
-                          <div key={cat} className="flex h-full min-w-full items-center justify-center px-3">
-                            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-900 dark:text-white">
-                              {cat}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
                 </div>
               </div>
               </div>
               )}
               <div className={cn("w-full", shouldShowWarmupBanner && "hidden")}>
-              <Accordion 
-                type="multiple" 
-                className="space-y-4"
-                value={openAccordions}
-                onValueChange={handleAccordionChange}
-              >
+              <Accordion type="multiple" className="space-y-4" style={{ overflowAnchor: "none" }}>
               {categories.map((category) => (
                 <AccordionItem 
                   key={category} 
                   value={category} 
-                  className="border-0"
-                  data-accordion-item
-                  ref={(el) => { accordionRefs.current[category] = el; }}
+                  className="scroll-mt-24 border-0"
                 >
-                  <Card className="overflow-hidden border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-xl transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5">
-                    <AccordionTrigger className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180">
+                  <Card className="overflow-hidden border-0 bg-white/95 shadow-lg dark:bg-slate-800/95">
+                    <AccordionTrigger
+                      onClick={handleAccordionTriggerClick}
+                      className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180"
+                    >
                       <div 
                         className="relative h-16 md:h-20 overflow-hidden w-full"
                         style={{
@@ -1375,7 +1188,7 @@ export default function Home() {
                         {/* Category header */}
                         <div className="absolute inset-0 flex items-center justify-between p-3 md:p-4">
                           <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center border border-white/30">
+                            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center border border-white/30">
                               {categoryIcons[category as keyof typeof categoryIcons]}
                             </div>
                             <div>
@@ -1390,7 +1203,7 @@ export default function Home() {
                           
                           <div className="flex items-center space-x-2">
                             {/* Custom subtle expand/collapse arrow */}
-                            <div className="w-6 h-6 bg-white/15 backdrop-blur-sm rounded-md flex items-center justify-center border border-white/20">
+                            <div className="w-6 h-6 bg-white/15 rounded-md flex items-center justify-center border border-white/20">
                               <svg className="w-3 h-3 text-white/90 transition-transform duration-300 ease-out" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 9l6 6 6-6" />
                               </svg>
@@ -1401,7 +1214,7 @@ export default function Home() {
                     </AccordionTrigger>
                     
                     {/* Content */}
-                    <AccordionContent className="p-0">
+                    <AccordionContent onAnimationEnd={handleAccordionContentAnimationEnd} className="p-0">
                       <div className="p-4">
                         {loadingCategories[category] ? (
                           <div className="space-y-3">
@@ -1418,13 +1231,13 @@ export default function Home() {
                           </div>
                         ) : getRenderableEvents(historicalEvents[category]).length > 0 ? (
                           <div className="space-y-3">
-                            {getRenderableEvents(historicalEvents[category]).map((event: HistoricalEvent, index: number) => {
+                              {getRenderableEvents(historicalEvents[category]).map((event: HistoricalEvent) => {
                               const reportKey = getEventReportKey(event);
                               const isReporting = reportingContent[reportKey] || false;
                               const isReported = reportedContent[reportKey] || false;
                               
                               return (
-                                <Card key={index} className="group border border-slate-200 dark:border-slate-700 bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-700 hover:shadow-md transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5">
+                                <Card key={getEventReportKey(event)} className="group border border-slate-200 bg-gradient-to-r from-white to-slate-50 dark:border-slate-700 dark:from-slate-800 dark:to-slate-700">
                                   <CardContent className="p-4">
                                     <div className="space-y-3">
                                       {/* Header with title and action buttons */}
@@ -1442,7 +1255,7 @@ export default function Home() {
                                           <button
                                             onClick={() => showReportConfirmation(event)}
                                             disabled={isReporting || isReported}
-                                            className="w-7 h-7 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg flex items-center justify-center shadow-sm hover:shadow-md transition-all duration-200 group/report disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="w-7 h-7 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg flex items-center justify-center shadow-sm transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
                                             title={isReported ? "Already reported by you" : "Report inappropriate content"}
                                           >
                                             {isReporting ? (
@@ -1464,10 +1277,10 @@ export default function Home() {
                                           {/* Share button */}
                                           <button
                                             onClick={() => shareContent(event)}
-                                            className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/share"
+                                            className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-md"
                                             title="Share this historical event"
                                           >
-                                            <svg className="w-3.5 h-3.5 text-white group-hover/share:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
                                             </svg>
                                           </button>
@@ -1478,10 +1291,10 @@ export default function Home() {
                                               href={event.source} 
                                               target="_blank" 
                                               rel="noopener noreferrer" 
-                                              className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md hover:shadow-lg hover:scale-105 transition-all duration-200 group/icon"
+                                              className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md"
                                               title={`View source for ${event.title}`}
                                             >
-                                              <svg className="w-3.5 h-3.5 text-white group-hover/icon:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                              <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                               </svg>
                                             </a>
@@ -1561,4 +1374,3 @@ export default function Home() {
     </div>
   );
 }
-
