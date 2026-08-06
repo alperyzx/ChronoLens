@@ -1059,7 +1059,7 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-2">
-                    <div className="h-8 w-8">
+                    <div className="h-11 w-11">
                       {showBackwardButton ? (
                         <button
                           type="button"
@@ -1104,7 +1104,7 @@ export default function Home() {
                       )}
                     </button>
 
-                    <div className="h-8 w-8 justify-self-end">
+                    <div className="h-11 w-11 justify-self-end">
                       {canGoForward ? (
                         <button
                           type="button"
