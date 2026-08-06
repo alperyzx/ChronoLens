@@ -10,11 +10,12 @@
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
 import {getTTLUntilEndOfWeek, getTTLUntilMidnight} from '@/lib/cache-file';
-import {HISTORICAL_EVENT_CATEGORIES} from '@/lib/historical-event-categories';
+import {HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory} from '@/lib/historical-event-categories';
 import {GEMINI_CACHE_MODEL, resolveGeminiContextCache} from '@/lib/gemini-context-cache';
 import {
   buildBatchEventPrompt,
   buildBatchEventWeekPrompt,
+  buildRefillEventPrompt,
   buildSingleEventPrompt,
   buildSingleEventWeekPrompt,
 } from '@/lib/gemini-prompt-builders';
@@ -174,6 +175,10 @@ const HistoricalEventSelectionSchema = z.object({
   events: z.array(HistoricalEventSchema).describe('The ranked candidate events ordered from most significant to least significant.'),
 });
 
+const HistoricalEventRefillSchema = z.object({
+  events: z.array(HistoricalEventSchema),
+});
+
 const GenerateHistoricalEventsOutputSchema = HistoricalEventSelectionSchema;
 export type GenerateHistoricalEventsOutput = z.infer<typeof GenerateHistoricalEventsOutputSchema>;
 
@@ -189,6 +194,13 @@ const HistoricalEventsByCategorySchema = z.object({
 });
 
 export type HistoricalEventsByCategory = z.infer<typeof HistoricalEventsByCategorySchema>;
+
+export type GenerateHistoricalEventRefillInput = {
+  date: string;
+  viewType: 'today' | 'week';
+  categories: HistoricalEventCategory[];
+  excludedEvents: Array<Pick<z.infer<typeof HistoricalEventSchema>, 'category' | 'title' | 'source'>>;
+};
 
 const HISTORICAL_EVENTS_GENERATION_MODEL = 'googleai/gemini-3-flash-preview';
 
@@ -388,6 +400,44 @@ export async function generateHistoricalEventsByCategory(input: GenerateHistoric
   }
 }
 
+export async function generateHistoricalEventRefill(input: GenerateHistoricalEventRefillInput): Promise<HistoricalEventsByCategory> {
+  try {
+    const weekInfo = input.viewType === 'week' ? getWeekDateRange(input.date) : undefined;
+    const output = await generateGeminiJson({
+      prompt: buildRefillEventPrompt({
+        date: input.date,
+        categories: input.categories,
+        excludedEvents: input.excludedEvents,
+        weekInfo,
+      }),
+      outputSchema: HistoricalEventRefillSchema,
+    });
+    const requestedCategories = new Set(input.categories);
+    const selections = emptyCategorySelectionMap();
+
+    for (const event of output?.events || []) {
+      if (requestedCategories.has(event.category)) {
+        selections[event.category].events.push(event);
+      }
+    }
+
+    for (const category of input.categories) {
+      selections[category].count = 3;
+    }
+
+    if (weekInfo) {
+      return normalizeSelectionsByCategory(filterByDateRangeForCategories(selections, weekInfo.startDate, weekInfo.endDate));
+    }
+
+    const [, month, day] = input.date.split('-');
+    const mmdd = `${month}-${day}`;
+    return normalizeSelectionsByCategory(filterByDateRangeForCategories(selections, mmdd, mmdd));
+  } catch (error) {
+    console.error('Error generating historical event refills:', error);
+    return emptyCategorySelectionMap();
+  }
+}
+
 const generateHistoricalEventsFlow = ai.defineFlow<
   typeof GenerateHistoricalEventsInputSchema,
   typeof GenerateHistoricalEventsOutputSchema
@@ -518,4 +568,3 @@ function normalizeSelectionsByCategory(eventsByCategory: HistoricalEventsByCateg
     Literature: normalizeSelection(eventsByCategory.Literature || emptyHistoricalEventSelection()),
   };
 }
-

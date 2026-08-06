@@ -14,6 +14,7 @@ import { useHeaderShrink } from "@/hooks/use-header-shrink";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from "@/lib/historical-event-categories";
+import { MINIMUM_PUBLISHABLE_EVENTS } from "@/lib/historical-event-selection";
 import { normalizeCacheDate } from "@/lib/cache-keys";
 import {
   AlertDialog,
@@ -58,7 +59,7 @@ type ClientCacheEntry<T> = {
 };
 
 const CLIENT_CACHE_PREFIX = "chronolens_client_events";
-const CLIENT_CACHE_VERSION = "v6";
+const CLIENT_CACHE_VERSION = "v10";
 const REPORTED_CONTENT_CACHE_KEY = "chronolens_reported_content_v1";
 const HIDDEN_CONTENT_CACHE_KEY = "chronolens_hidden_content_v1";
 const clientCacheMemory = new Map<string, ClientCacheEntry<unknown>>();
@@ -224,8 +225,12 @@ function getClientCacheExpiration(viewType: 'today' | 'week'): number {
   return now.getTime() + (14 * 24 * 60 * 60 * 1000);
 }
 
-function hasAnyHistoricalEventsByCategory(eventsByCategory: Record<HistoricalEventCategory, HistoricalEventSelection>): boolean {
-  return Object.values(eventsByCategory).some(selection => Array.isArray(selection?.events) && selection.events.length > 0);
+function hasCompleteHistoricalEventsByCategory(eventsByCategory: Partial<Record<HistoricalEventCategory, HistoricalEventSelection & { visibleEvents?: HistoricalEvent[] }>>): boolean {
+  return HISTORICAL_EVENT_CATEGORIES.every(category => {
+    const selection = eventsByCategory[category];
+    const events = selection?.visibleEvents ?? selection?.events ?? [];
+    return (selection?.count || 0) >= MINIMUM_PUBLISHABLE_EVENTS && events.length >= MINIMUM_PUBLISHABLE_EVENTS;
+  });
 }
 
 function getClientCache<T>(key: string): T | undefined {
@@ -424,7 +429,7 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
       visibleEvents: Array.isArray(result.visibleEvents) ? result.visibleEvents : [],
     };
 
-    if (payload.events.length > 0) {
+    if (payload.count >= MINIMUM_PUBLISHABLE_EVENTS && payload.visibleEvents.length >= MINIMUM_PUBLISHABLE_EVENTS) {
       setClientCache(clientCacheKey, payload, viewType, result.reportCacheRevision);
     }
     
@@ -449,7 +454,7 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateStr
   const cachedClientData = getClientCache<HistoricalEventsByCategory>(clientCacheKey);
   if (cachedClientData) {
     const memoryEntry = clientCacheMemory.get(clientCacheKey);
-    if (!reportCacheRevision || memoryEntry?.revision === reportCacheRevision) {
+    if (hasCompleteHistoricalEventsByCategory(cachedClientData) && (!reportCacheRevision || memoryEntry?.revision === reportCacheRevision)) {
     console.log(`All categories served from client cache`);
     return {
       eventsByCategory: cachedClientData,
@@ -494,7 +499,7 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateStr
 
   console.log(`All categories ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
 
-  if (result.dataByCategory && hasAnyHistoricalEventsByCategory(result.dataByCategory)) {
+  if (hasCompleteHistoricalEventsByCategory(eventsByCategory)) {
     setClientCache(clientCacheKey, eventsByCategory, viewType, result.reportCacheRevision);
   }
 
@@ -630,11 +635,13 @@ export default function Home() {
     }
 
     const hiddenKeys = new Set(Object.keys(hiddenContent).filter(key => hiddenContent[key]));
-    const sourceEvents = Array.isArray(selection.visibleEvents) && selection.visibleEvents.length > 0
+    const sourceEvents = Array.isArray(selection.visibleEvents)
       ? selection.visibleEvents
       : selection.events.slice(0, selection.count);
 
-    return sourceEvents.filter(event => !hiddenKeys.has(getEventReportKey(event)));
+    return sourceEvents
+      .filter(event => !hiddenKeys.has(getEventReportKey(event)))
+      .slice(0, selection.count);
   };
 
   useEffect(() => {
@@ -709,7 +716,7 @@ export default function Home() {
     
     try {
       const {eventsByCategory, cached} = await getHistoricalEventsForAllCategories(isTodayView, dateString);
-      const hasEvents = hasAnyHistoricalEventsByCategory(eventsByCategory);
+      const hasCompleteEvents = hasCompleteHistoricalEventsByCategory(eventsByCategory);
 
       setHistoricalEvents(prev => ({
         ...prev,
@@ -723,7 +730,7 @@ export default function Home() {
         }, {} as Record<string, boolean>)
       );
 
-      if (!cached && !hasEvents && shouldKeepWarmupVisible) {
+      if (!cached && !hasCompleteEvents && shouldKeepWarmupVisible) {
         batchRetryTimerRef.current = window.setTimeout(() => {
           void fetchAllEvents();
         }, 10000);
@@ -1561,4 +1568,3 @@ export default function Home() {
     </div>
   );
 }
-
