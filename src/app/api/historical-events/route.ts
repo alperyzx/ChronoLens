@@ -16,11 +16,12 @@ import { filterHiddenContent } from '@/lib/report-cache';
 import { getReportStats } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from '@/lib/historical-event-categories';
 
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v8';
 const GENERATION_LOCK_TTL_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_WAIT_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_POLL_MS = 1000;
 const SOURCE_URL_TIMEOUT_MS = 5000;
+const SOURCE_HTML_PREFIX_BYTES = 16 * 1024;
 
 export const maxDuration = 300;
 
@@ -67,25 +68,48 @@ async function validateSourceUrl(source: string): Promise<string> {
   const timeout = setTimeout(() => controller.abort(), SOURCE_URL_TIMEOUT_MS);
 
   try {
-    let response = await fetch(normalizedSource, {
-      method: 'HEAD',
+    const response = await fetch(normalizedSource, {
+      headers: { Range: `bytes=0-${SOURCE_HTML_PREFIX_BYTES - 1}` },
       redirect: 'follow',
       signal: controller.signal,
     });
 
-    if (!response.ok || response.status === 405) {
-      response = await fetch(normalizedSource, {
-        headers: { Range: 'bytes=0-4095' },
-        redirect: 'follow',
-        signal: controller.signal,
-      });
+    const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+    const isHtml = contentType.includes('text/html');
+    const isPdf = contentType.includes('application/pdf');
+
+    if (![200, 206].includes(response.status) || (!isHtml && !isPdf)) {
+      return '';
     }
 
-    const contentType = response.headers.get('content-type')?.toLowerCase() || '';
-    const isSupportedDocument = !contentType || contentType.includes('text/html') || contentType.includes('application/pdf');
+    if (isHtml && response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let html = '';
+      let bytesRead = 0;
 
-    if (!response.ok || !isSupportedDocument) {
-      return '';
+      try {
+        while (bytesRead < SOURCE_HTML_PREFIX_BYTES) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = value.subarray(0, SOURCE_HTML_PREFIX_BYTES - bytesRead);
+          html += decoder.decode(chunk, { stream: true });
+          bytesRead += chunk.byteLength;
+        }
+        html += decoder.decode();
+      } finally {
+        await reader.cancel().catch(() => undefined);
+      }
+
+      const pageHeadings = [...html.matchAll(/<(?:title|h1)\b[^>]*>([\s\S]*?)<\/(?:title|h1)>/gi)]
+        .map(match => match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())
+        .join(' ');
+      const isSoft404 = /\b404\b|page not found|\bnot found\b|page unavailable|content unavailable/i.test(pageHeadings);
+
+      if (isSoft404) {
+        return '';
+      }
     }
 
     return normalizeSourceUrl(response.url) || normalizedSource;
@@ -98,13 +122,14 @@ async function validateSourceUrl(source: string): Promise<string> {
 
 async function validateSelectionSources(selection: CachedHistoricalEventSelection): Promise<CachedHistoricalEventSelection> {
   const events = await Promise.all(
-    selection.events.map(async event => ({
-      ...event,
-      source: await validateSourceUrl(event.source),
-    }))
+    selection.events.map(async event => {
+      const source = await validateSourceUrl(event.source);
+      return source ? { ...event, source } : undefined;
+    })
   );
+  const validEvents = events.filter((event): event is CachedHistoricalEvent => Boolean(event));
 
-  return { ...selection, events };
+  return { ...selection, count: Math.min(selection.count, validEvents.length), events: validEvents };
 }
 
 async function validateCategorySources(selections: HistoricalEventsByCategory): Promise<HistoricalEventsByCategory> {
