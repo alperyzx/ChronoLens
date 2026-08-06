@@ -540,8 +540,7 @@ export default function Home() {
 
     const trigger = pendingAccordionScrollRef.current;
     pendingAccordionScrollRef.current = null;
-    const top = trigger.getBoundingClientRect().top + window.scrollY - 112;
-    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    trigger.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   useEffect(() => {
@@ -985,21 +984,29 @@ export default function Home() {
   };
 
   return (
-    <div
-      className={cn(
+    <div className={cn(
         "relative min-h-screen antialiased flex flex-col",
         isTodayView
           ? "bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900"
           : "bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 dark:from-slate-900 dark:via-amber-950/40 dark:to-rose-950/40"
       )}
-      style={isMobile ? { touchAction: "pan-y" } : undefined}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-      onTouchCancel={handleTouchCancel}
     >
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-md focus:bg-slate-950 focus:px-4 focus:py-3 focus:text-sm focus:font-medium focus:text-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+      >
+        Skip to historical events
+      </a>
+
       {/* Header */}
-      <div className={cn(
-        "fixed inset-x-0 top-0 z-40 h-24 border-b border-slate-200/60 dark:border-slate-700/60 select-none",
+      <header
+        aria-label="ChronoLens header"
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
+        style={isMobile ? { touchAction: "pan-y" } : undefined}
+        className={cn(
+        "fixed inset-x-0 top-0 z-40 h-[var(--app-header-height)] border-b border-slate-200/60 pt-[env(safe-area-inset-top)] dark:border-slate-700/60 select-none",
         isTodayView
           ? "bg-gradient-to-br from-slate-50 via-white to-blue-50 dark:from-slate-900 dark:via-slate-800 dark:to-blue-900"
           : "bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 dark:from-slate-900 dark:via-amber-950/40 dark:to-rose-950/40"
@@ -1030,7 +1037,7 @@ export default function Home() {
                   <div className="flex justify-end flex-shrink-0">
                     <button
                       onClick={toggleView}
-                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/90 px-3 py-1.5 shadow-sm transition-colors duration-150 hover:bg-white dark:border-slate-700/60 dark:bg-slate-800/90"
+                      className="flex min-h-11 items-center gap-1.5 rounded-full border border-white/50 bg-white/90 px-3 py-1.5 shadow-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/90"
                       title={nextViewLabel}
                     >
                       {isTodayView ? (
@@ -1057,7 +1064,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={goBackward}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm transition-colors duration-150 hover:bg-white dark:border-slate-700/60 dark:bg-slate-800/90"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/90"
                           aria-label={isTodayView ? "Previous day" : "Previous week"}
                           title={isTodayView ? "Previous day" : "Previous week"}
                         >
@@ -1068,7 +1075,7 @@ export default function Home() {
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/90"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/90"
                           aria-hidden="true"
                           tabIndex={-1}
                         />
@@ -1077,7 +1084,7 @@ export default function Home() {
 
                     <button 
                       onClick={toggleView}
-                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/90 px-2.5 py-1.5 shadow-sm transition-colors duration-150 hover:bg-white dark:border-slate-700/60 dark:bg-slate-800/90"
+                      className="flex min-h-11 items-center gap-1.5 rounded-full border border-white/50 bg-white/90 px-2.5 py-1.5 shadow-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/90"
                       title={nextViewLabel}
                     >
                       {isTodayView ? (
@@ -1102,7 +1109,7 @@ export default function Home() {
                         <button
                           type="button"
                           onClick={goForward}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm transition-colors duration-150 hover:bg-white dark:border-slate-700/60 dark:bg-slate-800/90"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm transition-colors duration-150 touch-manipulation hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:border-slate-700/60 dark:bg-slate-800/90"
                           aria-label={isTodayView ? "Next day" : "This week"}
                           title={isTodayView ? "Next day" : "This week"}
                         >
@@ -1113,7 +1120,7 @@ export default function Home() {
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/90"
+                          className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/50 bg-white/90 shadow-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/90"
                           aria-hidden="true"
                           tabIndex={-1}
                         />
@@ -1132,10 +1139,10 @@ export default function Home() {
             </div>
           </div>
         </div>
-      </div>
+      </header>
       
       {/* Main Content */}
-      <div className="container mx-auto px-4 pb-8 pt-24 relative z-10 flex-1">
+      <main id="main-content" className="container mx-auto px-4 pb-8 pt-[var(--app-header-height)] relative z-10 flex-1">
         <div className="max-w-6xl mx-auto pt-4">
             {shouldShowWarmupBanner && (
             <div className="mb-6 flex justify-center" role="status" aria-live="polite">
@@ -1169,11 +1176,12 @@ export default function Home() {
                 <AccordionItem 
                   key={category} 
                   value={category} 
-                  className="scroll-mt-24 border-0"
+                  className="border-0"
                 >
                   <Card className="overflow-hidden border-0 bg-white/95 shadow-lg dark:bg-slate-800/95">
                     <AccordionTrigger
                       onClick={handleAccordionTriggerClick}
+                      style={{ scrollMarginTop: "calc(var(--app-header-height) + 1rem)" }}
                       className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180"
                     >
                       <div 
@@ -1255,7 +1263,8 @@ export default function Home() {
                                           <button
                                             onClick={() => showReportConfirmation(event)}
                                             disabled={isReporting || isReported}
-                                            className="w-7 h-7 bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-slate-700 dark:hover:text-slate-300 rounded-lg flex items-center justify-center shadow-sm transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            aria-label={isReported ? "Already reported" : "Report inappropriate content"}
+                                            className="h-11 w-11 shrink-0 touch-manipulation rounded-lg bg-slate-200 text-slate-500 shadow-sm transition-colors duration-150 hover:bg-slate-300 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-slate-700 dark:text-slate-400 dark:hover:bg-slate-600 dark:hover:text-slate-300"
                                             title={isReported ? "Already reported by you" : "Report inappropriate content"}
                                           >
                                             {isReporting ? (
@@ -1277,7 +1286,8 @@ export default function Home() {
                                           {/* Share button */}
                                           <button
                                             onClick={() => shareContent(event)}
-                                            className="w-7 h-7 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center shadow-md"
+                                            aria-label="Share this historical event"
+                                            className="h-11 w-11 shrink-0 touch-manipulation rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
                                             title="Share this historical event"
                                           >
                                             <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1291,8 +1301,9 @@ export default function Home() {
                                               href={event.source} 
                                               target="_blank" 
                                               rel="noopener noreferrer" 
-                                              className="w-7 h-7 bg-gradient-to-br from-indigo-500 to-blue-600 rounded-lg flex items-center justify-center shadow-md"
-                                              title={`View source for ${event.title}`}
+                                              aria-label={`View source for ${event.title} (opens in new tab)`}
+                                              className="flex h-11 w-11 shrink-0 touch-manipulation items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                                              title={`View source for ${event.title} (opens in new tab)`}
                                             >
                                               <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1308,7 +1319,7 @@ export default function Home() {
                                         </div>
                                       </div>
                                       <div className="w-full">
-                                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-sm">
+                                        <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-base">
                                           {event.description}
                                         </p>
                                       </div>
@@ -1346,7 +1357,7 @@ export default function Home() {
             </Accordion>
               </div>
           </div>
-        </div>
+        </main>
       <Footer />
       
       {/* Report Confirmation Dialog */}
