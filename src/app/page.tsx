@@ -59,7 +59,7 @@ type ClientCacheEntry<T> = {
 };
 
 const CLIENT_CACHE_PREFIX = "chronolens_client_events";
-const CLIENT_CACHE_VERSION = "v10";
+const CLIENT_CACHE_VERSION = "v6";
 const REPORTED_CONTENT_CACHE_KEY = "chronolens_reported_content_v1";
 const HIDDEN_CONTENT_CACHE_KEY = "chronolens_hidden_content_v1";
 const clientCacheMemory = new Map<string, ClientCacheEntry<unknown>>();

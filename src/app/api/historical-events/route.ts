@@ -25,7 +25,7 @@ import {
   mergeValidatedSelections,
 } from '@/lib/historical-event-selection';
 
-const CACHE_VERSION = 'v10';
+const CACHE_VERSION = 'v6';
 const GENERATION_LOCK_TTL_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_WAIT_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_POLL_MS = 1000;
