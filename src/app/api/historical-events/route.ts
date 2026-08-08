@@ -1,5 +1,10 @@
 import { after, NextRequest, NextResponse } from 'next/server';
-import { generateHistoricalEvents, generateHistoricalEventsByCategory, type HistoricalEventsByCategory } from '@/ai/flows/generate-historical-events';
+import {
+  generateHistoricalEventRefill,
+  generateHistoricalEvents,
+  generateHistoricalEventsByCategory,
+  type HistoricalEventsByCategory,
+} from '@/ai/flows/generate-historical-events';
 import { 
   acquireCacheLock,
   releaseCacheLock,
@@ -15,11 +20,17 @@ import { normalizeCacheDate } from '@/lib/cache-keys';
 import { filterHiddenContent } from '@/lib/report-cache';
 import { getReportStats } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from '@/lib/historical-event-categories';
+import {
+  hasMinimumEvents,
+  mergeValidatedSelections,
+} from '@/lib/historical-event-selection';
 
 const CACHE_VERSION = 'v6';
 const GENERATION_LOCK_TTL_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_WAIT_MS = 4 * 60 * 1000;
 const GENERATION_LOCK_POLL_MS = 1000;
+const SOURCE_URL_TIMEOUT_MS = 5000;
+const SOURCE_HTML_PREFIX_BYTES = 16 * 1024;
 
 export const maxDuration = 300;
 
@@ -36,8 +47,104 @@ function buildReportCacheRevision(stats: Awaited<ReturnType<typeof getReportStat
   ].join(':');
 }
 
-function isEmptySelection(selection?: CachedHistoricalEventSelection | null): boolean {
-  return !selection || selection.count <= 0 || !Array.isArray(selection.events) || selection.events.length === 0;
+function normalizeSourceUrl(source: string): string | undefined {
+  try {
+    const url = new URL(source.trim());
+
+    if (!['http:', 'https:'].includes(url.protocol) || !url.hostname || url.username || url.password) {
+      return undefined;
+    }
+
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+// ponytail: checks URL reachability, not fact-to-page semantics; use grounded search when proof is required.
+async function validateSourceUrl(source: string): Promise<string> {
+  const normalizedSource = normalizeSourceUrl(source);
+  if (!normalizedSource) {
+    return '';
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SOURCE_URL_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(normalizedSource, {
+      headers: { Range: `bytes=0-${SOURCE_HTML_PREFIX_BYTES - 1}` },
+      redirect: 'follow',
+      signal: controller.signal,
+    });
+    const contentType = response.headers.get('content-type')?.toLowerCase() || '';
+    const isHtml = contentType.includes('text/html');
+    const isPdf = contentType.includes('application/pdf');
+
+    if (![200, 206].includes(response.status) || (!isHtml && !isPdf)) {
+      return '';
+    }
+
+    if (isHtml && response.body) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let html = '';
+      let bytesRead = 0;
+
+      try {
+        while (bytesRead < SOURCE_HTML_PREFIX_BYTES) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunk = value.subarray(0, SOURCE_HTML_PREFIX_BYTES - bytesRead);
+          html += decoder.decode(chunk, { stream: true });
+          bytesRead += chunk.byteLength;
+        }
+        html += decoder.decode();
+      } finally {
+        await reader.cancel().catch(() => undefined);
+      }
+
+      const pageHeadings = [...html.matchAll(/<(?:title|h1)\b[^>]*>([\s\S]*?)<\/(?:title|h1)>/gi)]
+        .map(match => match[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim())
+        .join(' ');
+
+      if (/\b404\b|page not found|\bnot found\b|page unavailable|content unavailable/i.test(pageHeadings)) {
+        return '';
+      }
+    }
+
+    return normalizeSourceUrl(response.url) || normalizedSource;
+  } catch {
+    return '';
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function validateSelectionSources(selection: CachedHistoricalEventSelection): Promise<CachedHistoricalEventSelection> {
+  const checkedEvents = await Promise.all(
+    selection.events.map(async event => {
+      const source = await validateSourceUrl(event.source);
+      return source ? { ...event, source } : undefined;
+    })
+  );
+  const validEvents = checkedEvents.filter((event): event is CachedHistoricalEvent => Boolean(event));
+  const visibleEvents = await filterHiddenContent(validEvents);
+
+  return { count: selection.count, events: visibleEvents };
+}
+
+async function validateCategorySources(selections: HistoricalEventsByCategory): Promise<HistoricalEventsByCategory> {
+  const entries = await Promise.all(
+    HISTORICAL_EVENT_CATEGORIES.map(async category => [
+      category,
+      await validateSelectionSources(selections[category] || emptySelection()),
+    ] as const)
+  );
+
+  return Object.fromEntries(entries) as HistoricalEventsByCategory;
 }
 
 function getGenerationLockKey(date: string, viewType: 'today' | 'week', scope: 'batch' | HistoricalEventCategory): string {
@@ -51,11 +158,22 @@ async function getCachedSingleCategoryResponse(cacheKey: string): Promise<Cached
   }
 
   const cachedSelection = await getCacheData(cacheKey);
-  return isEmptySelection(cachedSelection) ? undefined : cachedSelection;
+  if (!hasMinimumEvents(cachedSelection)) {
+    return undefined;
+  }
+
+  return (await getVisibleSelection(cachedSelection)).length >= 3 ? cachedSelection : undefined;
 }
 
 async function getCachedBatchResponse(date: string, viewType: 'today' | 'week'): Promise<HistoricalEventsByCategory | undefined> {
-  const cacheKeys = HISTORICAL_EVENT_CATEGORIES.map(currentCategory => {
+  const selectionsByCategory = await getCachedSelectionsByCategory(date, viewType);
+  const hasCompleteBatch = HISTORICAL_EVENT_CATEGORIES.every(category => hasMinimumEvents(selectionsByCategory[category]));
+
+  return hasCompleteBatch ? selectionsByCategory : undefined;
+}
+
+async function getCachedSelectionsByCategory(date: string, viewType: 'today' | 'week'): Promise<HistoricalEventsByCategory> {
+  const entries = await Promise.all(HISTORICAL_EVENT_CATEGORIES.map(async currentCategory => {
     const cacheKey: CacheKey = {
       date,
       category: currentCategory,
@@ -63,39 +181,14 @@ async function getCachedBatchResponse(date: string, viewType: 'today' | 'week'):
       version: CACHE_VERSION,
     };
 
-    return {
-      category: currentCategory,
-      key: generateCacheKey(cacheKey),
-    };
-  });
+    return [currentCategory, await getCachedSingleCategoryResponse(generateCacheKey(cacheKey)) || emptySelection()] as const;
+  }));
 
-  const cacheValidity = await Promise.all(
-    cacheKeys.map(async entry => ({
-      category: entry.category,
-      hasCache: await hasValidCache(entry.key),
-    }))
-  );
-
-  if (!cacheValidity.every(result => result.hasCache)) {
-    return undefined;
-  }
-
-  const dataByCategory = await Promise.all(
-    cacheKeys.map(async entry => [
-      entry.category,
-      await getCacheData(entry.key),
-    ] as const)
-  );
-
-  const selectionsByCategory = Object.fromEntries(dataByCategory) as HistoricalEventsByCategory;
-  const hasAnySelection = HISTORICAL_EVENT_CATEGORIES.some(category => !isEmptySelection(selectionsByCategory[category]));
-
-  return hasAnySelection ? selectionsByCategory : undefined;
+  return Object.fromEntries(entries) as HistoricalEventsByCategory;
 }
 
 async function getVisibleSelection(selection: CachedHistoricalEventSelection): Promise<CachedHistoricalEvent[]> {
-  const visibleEvents = await filterHiddenContent(selection.events);
-  return visibleEvents.slice(0, selection.count);
+  return filterHiddenContent(selection.events);
 }
 
 async function getVisibleSelectionsByCategory(selections: HistoricalEventsByCategory): Promise<Record<HistoricalEventCategory, CachedHistoricalEvent[]>> {
@@ -117,6 +210,87 @@ function emptySelectionsByCategory(): HistoricalEventsByCategory {
   return Object.fromEntries(
     HISTORICAL_EVENT_CATEGORIES.map(category => [category, emptySelection()] as const)
   ) as HistoricalEventsByCategory;
+}
+
+function finalizeSelection(
+  primary: CachedHistoricalEventSelection,
+  refill: CachedHistoricalEventSelection = emptySelection()
+): CachedHistoricalEventSelection {
+  const selection = mergeValidatedSelections(primary, refill);
+  return hasMinimumEvents(selection) ? selection : emptySelection();
+}
+
+async function generateCompleteBatch(
+  date: string,
+  viewType: 'today' | 'week',
+  cachedSelections: HistoricalEventsByCategory
+): Promise<HistoricalEventsByCategory> {
+  const missingCachedCategories = HISTORICAL_EVENT_CATEGORIES.filter(category => !hasMinimumEvents(cachedSelections[category]));
+
+  if (missingCachedCategories.length < HISTORICAL_EVENT_CATEGORIES.length) {
+    const refill = await generateHistoricalEventRefill({
+      date,
+      viewType,
+      categories: missingCachedCategories,
+      excludedEvents: HISTORICAL_EVENT_CATEGORIES.flatMap(category => cachedSelections[category]?.events || []),
+    });
+    const validatedRefill = await validateCategorySources(refill);
+
+    return Object.fromEntries(
+      HISTORICAL_EVENT_CATEGORIES.map(category => [
+        category,
+        finalizeSelection(cachedSelections[category], validatedRefill[category]),
+      ])
+    ) as HistoricalEventsByCategory;
+  }
+
+  const generated = await generateHistoricalEventsByCategory({ date, viewType, category: 'Sociology' });
+  const validated = await validateCategorySources(generated);
+  const deficientCategories = HISTORICAL_EVENT_CATEGORIES.filter(category => !hasMinimumEvents(validated[category]));
+
+  if (deficientCategories.length === 0) {
+    return Object.fromEntries(
+      HISTORICAL_EVENT_CATEGORIES.map(category => [category, finalizeSelection(validated[category])])
+    ) as HistoricalEventsByCategory;
+  }
+
+  const refill = await generateHistoricalEventRefill({
+    date,
+    viewType,
+    categories: deficientCategories,
+    excludedEvents: HISTORICAL_EVENT_CATEGORIES.flatMap(category => generated[category]?.events || []),
+  });
+  const validatedRefill = await validateCategorySources(refill);
+
+  return Object.fromEntries(
+    HISTORICAL_EVENT_CATEGORIES.map(category => [
+      category,
+      finalizeSelection(validated[category], validatedRefill[category]),
+    ])
+  ) as HistoricalEventsByCategory;
+}
+
+async function generateCompleteSelection(
+  date: string,
+  viewType: 'today' | 'week',
+  category: HistoricalEventCategory
+): Promise<CachedHistoricalEventSelection> {
+  const generated = await generateHistoricalEvents({ date, viewType, category });
+  const validated = await validateSelectionSources(generated);
+
+  if (hasMinimumEvents(validated)) {
+    return finalizeSelection(validated);
+  }
+
+  const refill = await generateHistoricalEventRefill({
+    date,
+    viewType,
+    categories: [category],
+    excludedEvents: generated.events,
+  });
+  const validatedRefill = await validateSelectionSources(refill[category] || emptySelection());
+
+  return finalizeSelection(validated, validatedRefill);
 }
 
 async function runLockedGeneration<T>(options: {
@@ -257,7 +431,7 @@ export async function GET(request: NextRequest) {
 
       console.log('Fetching fresh data from Gemini API for all categories');
 
-      if (!process.env.GOOGLE_GENAI_API_KEY && !process.env.GOOGLE_API_KEY) {
+      if (!process.env.GOOGLE_GENAI_API_KEY && !process.env.GOOGLE_API_KEY && !process.env.GEMINI_API_KEY) {
         console.error('Google Gemini API key not configured');
         return NextResponse.json({
           error: 'API key not configured. Please set GOOGLE_GENAI_API_KEY in your environment variables.',
@@ -273,21 +447,17 @@ export async function GET(request: NextRequest) {
         runLockedGeneration<HistoricalEventsByCategory>({
           lockKey,
           readCachedData: async () => getCachedBatchResponse(date, viewType as 'today' | 'week'),
-          generateFreshData: async () => {
-            const generatedEvents = await generateHistoricalEventsByCategory({
-              date,
-              viewType: viewType as 'today' | 'week',
-              category: 'Sociology'
-            });
-
-            return generatedEvents;
-          },
+          generateFreshData: async () => generateCompleteBatch(
+            date,
+            viewType as 'today' | 'week',
+            await getCachedSelectionsByCategory(date, viewType as 'today' | 'week')
+          ),
           storeFreshData: async generatedEventsByCategory => {
             await Promise.all(
               HISTORICAL_EVENT_CATEGORIES.map(async currentCategory => {
                 const cachedEvents = generatedEventsByCategory[currentCategory] || { count: 0, events: [] };
 
-                if (isEmptySelection(cachedEvents)) {
+                if (!hasMinimumEvents(cachedEvents)) {
                   return;
                 }
 
@@ -314,6 +484,7 @@ export async function GET(request: NextRequest) {
         dataByCategory: eventsByCategory,
         visibleEventsByCategory,
         cached,
+        reportCacheRevision: buildReportCacheRevision(await getReportStats()),
         timestamp: new Date().toISOString()
       });
     }
@@ -345,7 +516,7 @@ export async function GET(request: NextRequest) {
     console.log(`Fetching fresh data from Gemini API for: ${key}`);
     
     // Check if API key is configured
-    if (!process.env.GOOGLE_GENAI_API_KEY && !process.env.GOOGLE_API_KEY) {
+    if (!process.env.GOOGLE_GENAI_API_KEY && !process.env.GOOGLE_API_KEY && !process.env.GEMINI_API_KEY) {
       console.error('Google Gemini API key not configured');
       return NextResponse.json({
         error: 'API key not configured. Please set GOOGLE_GENAI_API_KEY in your environment variables.',
@@ -361,13 +532,13 @@ export async function GET(request: NextRequest) {
       runLockedGeneration({
       lockKey,
       readCachedData: async () => getCachedSingleCategoryResponse(key),
-      generateFreshData: async () => generateHistoricalEvents({
+      generateFreshData: async () => generateCompleteSelection(
         date,
-        viewType: viewType as 'today' | 'week',
-        category: category as HistoricalEventCategory
-      }),
+        viewType as 'today' | 'week',
+        category as HistoricalEventCategory
+      ),
       storeFreshData: async generatedEvents => {
-        if (isEmptySelection(generatedEvents)) {
+        if (!hasMinimumEvents(generatedEvents)) {
           return;
         }
 

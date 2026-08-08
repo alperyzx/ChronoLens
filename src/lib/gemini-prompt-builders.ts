@@ -11,6 +11,13 @@ export type HistoricalEventWeekInfo = {
   endDate: string;
 };
 
+export type HistoricalEventRefillInput = {
+  date: string;
+  categories: string[];
+  excludedEvents: Array<{ category: string; title: string; source: string }>;
+  weekInfo?: HistoricalEventWeekInfo;
+};
+
 const EVENT_SELECTION_GUIDANCE = [
   'Return a JSON object with a count field between 3 and 5.',
   'Return an events array containing at least 6 candidate events ordered from most significant to least significant.',
@@ -60,4 +67,33 @@ export function buildBatchEventWeekPrompt(date: string, weekInfo: HistoricalEven
     'For each category, return a JSON object that follows this selection format:',
     EVENT_SELECTION_GUIDANCE,
   ].join('\n');
+}
+
+export function buildRefillEventPrompt(input: HistoricalEventRefillInput): string {
+  const dateRule = input.weekInfo
+    ? `Every event must fall between ${input.weekInfo.startDate} and ${input.weekInfo.endDate} (MM-DD).`
+    : 'Every event must match the exact same month and day as the requested date.';
+  const exclusions = input.excludedEvents.length > 0
+    ? input.excludedEvents.map(event => `- ${event.category}: ${event.title} | ${event.source}`).join('\n')
+    : '- None';
+
+  return [
+    'Generate replacement historical-event candidates for only the requested categories.',
+    `Date: ${input.date}`,
+    input.weekInfo ? `Week range: ${input.weekInfo.monthDay}` : '',
+    `Categories: ${input.categories.join(', ')}`,
+    dateRule,
+    'Return at least 12 new candidates for each requested category.',
+    'Do not repeat any excluded title or source URL.',
+    'Use confident, live, permanent source URLs that directly verify each event.',
+    'Prefer canonical English Wikipedia articles and official government, university, archive, or museum pages.',
+    'Avoid news articles, publisher marketing pages, URL shorteners, and deep links likely to block automated access.',
+    'When uncertain about a deep link, use the canonical Wikipedia biography or event article.',
+    'Do not guess or fabricate URLs.',
+    'Descriptions must be 50-100 words.',
+    'Return JSON in this exact shape: {"events":[...]}.',
+    'Each event must include title, date, description, category, source, and significanceRank.',
+    'Excluded events:',
+    exclusions,
+  ].filter(Boolean).join('\n');
 }
