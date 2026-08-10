@@ -6,7 +6,8 @@ import {
   buildSingleEventWeekPrompt,
 } from '../src/lib/gemini-prompt-builders';
 import {GEMINI_CACHE_MODEL} from '../src/lib/gemini-context-cache';
-import {getTTLUntilEndOfWeek, getTTLUntilMidnight} from '../src/lib/cache-file';
+import {generateCacheKey, getTTLUntilEndOfWeek, getTTLUntilMidnight} from '../src/lib/cache-file';
+import {getISOWeekCacheId, normalizeCacheDate} from '../src/lib/cache-keys';
 
 function assertWithinRange(value: number, minInclusive: number, maxInclusive: number, label: string): void {
   assert.ok(Number.isFinite(value), `${label} must be a finite number`);
@@ -18,8 +19,19 @@ function main(): void {
   const midnightTtl = getTTLUntilMidnight();
   const weekTtl = getTTLUntilEndOfWeek();
 
-  assertWithinRange(midnightTtl, 1, 24 * 60 * 60, 'Midnight TTL');
-  assertWithinRange(weekTtl, 1, 7 * 24 * 60 * 60, 'Week TTL');
+  assertWithinRange(midnightTtl, 1, 7 * 24 * 60 * 60, 'Midnight TTL');
+  assertWithinRange(weekTtl, 1, 14 * 24 * 60 * 60, 'Week TTL');
+
+  assert.equal(getISOWeekCacheId('2026-07-27'), '2026-w31');
+  assert.equal(getISOWeekCacheId('2026-08-02'), '2026-w31');
+  assert.equal(getISOWeekCacheId('2026-08-03'), '2026-w32');
+  assert.equal(getISOWeekCacheId('2021-01-01'), '2020-w53');
+  assert.equal(getISOWeekCacheId('2024-12-30'), '2025-w01');
+  assert.equal(normalizeCacheDate('2026-07-29', 'week'), '2026-w31');
+  assert.equal(
+    generateCacheKey({ date: '2026-07-29', category: 'Art', viewType: 'week', version: 'v6' }),
+    'chronolens_events_week_Art_2026-w31_v6'
+  );
 
   const todayPrompt = buildSingleEventPrompt({
     date: '2026-05-05',

@@ -19,7 +19,7 @@ export interface CachedHistoricalEventSelection {
 }
 
 export type CacheKey = {
-  date: string; // YYYY-MM-DD; week view is normalized to the start of the week
+  date: string; // YYYY-MM-DD; week view is normalized to an ISO week ID (YYYY-wNN)
   category: HistoricalEventCategory;
   viewType: 'today' | 'week';
   version?: string;

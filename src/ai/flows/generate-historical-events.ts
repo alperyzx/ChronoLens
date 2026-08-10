@@ -10,6 +10,7 @@
 import {ai} from '@/ai/ai-instance';
 import {z} from 'genkit';
 import {getTTLUntilEndOfWeek, getTTLUntilMidnight} from '@/lib/cache-file';
+import {getISOWeekStartDate} from '@/lib/cache-keys';
 import {HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory} from '@/lib/historical-event-categories';
 import {GEMINI_CACHE_MODEL, resolveGeminiContextCache} from '@/lib/gemini-context-cache';
 import {
@@ -22,28 +23,23 @@ import {
 
 // Helper function to calculate a week's date range for the selected anchor date.
 function getWeekDateRange(anchorDate: string): { startDate: string; endDate: string; monthDay: string } {
-  const [year, month, day] = anchorDate.split('-').map(Number);
-  const anchor = new Date(year, month - 1, day);
-  const dayOfWeek = anchor.getDay();
-
-  const startOfWeek = new Date(anchor);
-  startOfWeek.setDate(anchor.getDate() - dayOfWeek);
+  const startOfWeek = getISOWeekStartDate(anchorDate);
 
   const endOfWeek = new Date(startOfWeek);
-  endOfWeek.setDate(startOfWeek.getDate() + 6);
+  endOfWeek.setUTCDate(startOfWeek.getUTCDate() + 6);
 
-  const startMonth = startOfWeek.toLocaleDateString('en-US', { month: 'long' });
-  const endMonth = endOfWeek.toLocaleDateString('en-US', { month: 'long' });
-  const startDay = startOfWeek.getDate();
-  const endDay = endOfWeek.getDate();
+  const startMonth = startOfWeek.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+  const endMonth = endOfWeek.toLocaleDateString('en-US', { month: 'long', timeZone: 'UTC' });
+  const startDay = startOfWeek.getUTCDate();
+  const endDay = endOfWeek.getUTCDate();
 
   const monthDay = startMonth === endMonth
     ? `${startMonth} ${startDay}-${endDay}`
     : `${startMonth} ${startDay}-${endMonth} ${endDay}`;
 
-  const startMM = String(startOfWeek.getMonth() + 1).padStart(2, '0');
+  const startMM = String(startOfWeek.getUTCMonth() + 1).padStart(2, '0');
   const startDD = String(startDay).padStart(2, '0');
-  const endMM = String(endOfWeek.getMonth() + 1).padStart(2, '0');
+  const endMM = String(endOfWeek.getUTCMonth() + 1).padStart(2, '0');
   const endDD = String(endDay).padStart(2, '0');
 
   return {

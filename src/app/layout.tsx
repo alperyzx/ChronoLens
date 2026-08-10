@@ -1,22 +1,7 @@
 import type {Metadata, Viewport} from 'next';
-import {Geist, Geist_Mono} from 'next/font/google';
 import Script from 'next/script';
 import './globals.css';
 import ClientComponent from './ClientComponent';
-
-const geistSans = Geist({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-  display: 'swap', // Improve font loading performance
-  preload: true,
-});
-
-const geistMono = Geist_Mono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-  display: 'swap', // Improve font loading performance
-  preload: false, // Only preload if actively used
-});
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -62,7 +47,7 @@ export default function RootLayout({
         />
         {/* End Google Tag Manager */}
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+      <body className="antialiased">
         {/* Google Tag Manager (noscript) */}
         <noscript>
           <iframe src="https://www.googletagmanager.com/ns.html?id=GTM-MSZZLH8P"
