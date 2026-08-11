@@ -159,7 +159,7 @@ export type GenerateHistoricalEventsInput = z.infer<typeof GenerateHistoricalEve
 
 const HistoricalEventSchema = z.object({
   title: z.string().describe('The title of the historical event.'),
-  date: z.string().describe('The ISO date string of the historical event (YYYY-MM-DD).'),
+  date: z.string().describe('The ISO date string of when the historical event actually occurred (YYYY-MM-DD), using the real historical year, not the request/current date.'),
   description: z.string().describe('A description of the historical event (50-100 words).'),
   category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of the historical event.'),
   source: z.string().describe('URL to a reputable source verifying this historical event.'),
@@ -228,19 +228,23 @@ Output rules:
 - Return only a JSON array
 - Each event must include title, date, description, category, and source
 - Date must be written as YYYY-MM-DD
+- The date field MUST use the actual historical year the event occurred (for example 1965-08-11), NOT the current year and NOT the request date
+- Never copy the request date into the date field; the request date only supplies the month and day to match
 - Category must match the requested category`;
 
 const SINGLE_EVENT_TODAY_CACHE_INSTRUCTIONS = `${SHARED_SINGLE_EVENT_CACHE_INSTRUCTIONS}
 
 Date rule:
-- Only include events that happened on the exact same month and day as the live request date.
+- Only include events that happened on the exact same month and day as the live request date, in any past year.
+- The request date only provides the month and day to match. Set each event's date to the real historical year it happened, keeping the same month and day.
 
 The live request will provide the date and category.`;
 
 const SINGLE_EVENT_WEEK_CACHE_INSTRUCTIONS = `${SHARED_SINGLE_EVENT_CACHE_INSTRUCTIONS}
 
 Date rule:
-- Only include events whose MM-DD falls within the live request's week range.
+- Only include events whose MM-DD falls within the live request's week range, in any past year.
+- The request only provides the month/day range to match. Set each event's date to the real historical year it happened, keeping the matching month and day.
 
 The live request will provide the week range, start date, end date, and category.`;
 
@@ -274,19 +278,23 @@ Output rules:
 - Include exactly one key for each category
 - Each event must include title, date, description, category, and source
 - Date must be written as YYYY-MM-DD
+- The date field MUST use the actual historical year the event occurred (for example 1965-08-11), NOT the current year and NOT the request date
+- Never copy the request date into the date field; the request date only supplies the month and day to match
 - The category field must match the key it belongs to`;
 
 const BATCH_EVENT_TODAY_CACHE_INSTRUCTIONS = `${SHARED_BATCH_EVENT_CACHE_INSTRUCTIONS}
 
 Date rule:
-- Only include events that happened on the exact same month and day as the live request date.
+- Only include events that happened on the exact same month and day as the live request date, in any past year.
+- The request date only provides the month and day to match. Set each event's date to the real historical year it happened, keeping the same month and day.
 
 The live request will provide the date.`;
 
 const BATCH_EVENT_WEEK_CACHE_INSTRUCTIONS = `${SHARED_BATCH_EVENT_CACHE_INSTRUCTIONS}
 
 Date rule:
-- Only include events that fall within the live request's week range.
+- Only include events that fall within the live request's week range, in any past year.
+- The request only provides the month/day range to match. Set each event's date to the real historical year it happened, keeping the matching month and day.
 
 The live request will provide the week range, start date, and end date.`;
 
@@ -450,7 +458,7 @@ const generateHistoricalEventsFlow = ai.defineFlow<
       const weekInfo = getWeekDateRange(date);
       const weekOutput = await generateHistoricalEventsWithCache({
         cacheId: 'historical-events-single-week',
-        displayName: 'chronolens historical events single week',
+        displayName: 'chronolens historical events single week v2',
         instructions: SINGLE_EVENT_WEEK_CACHE_INSTRUCTIONS,
         prompt: buildSingleEventWeekPrompt({ date, category: input.category }, weekInfo),
         outputSchema: GenerateHistoricalEventsOutputSchema,
@@ -462,7 +470,7 @@ const generateHistoricalEventsFlow = ai.defineFlow<
 
     const todayOutput = await generateHistoricalEventsWithCache({
       cacheId: 'historical-events-single-today',
-      displayName: 'chronolens historical events single today',
+      displayName: 'chronolens historical events single today v2',
       instructions: SINGLE_EVENT_TODAY_CACHE_INSTRUCTIONS,
       prompt: buildSingleEventPrompt(input),
       outputSchema: GenerateHistoricalEventsOutputSchema,
@@ -492,7 +500,7 @@ const generateHistoricalEventsByCategoryFlow = ai.defineFlow<
       const weekInfo = getWeekDateRange(date);
       const weekOutput = await generateHistoricalEventsWithCache({
         cacheId: 'historical-events-batch-week',
-        displayName: 'chronolens historical events batch week',
+        displayName: 'chronolens historical events batch week v2',
         instructions: BATCH_EVENT_WEEK_CACHE_INSTRUCTIONS,
         prompt: buildBatchEventWeekPrompt(date, weekInfo),
         outputSchema: HistoricalEventsByCategorySchema,
@@ -503,7 +511,7 @@ const generateHistoricalEventsByCategoryFlow = ai.defineFlow<
 
     const todayOutput = await generateHistoricalEventsWithCache({
       cacheId: 'historical-events-batch-today',
-      displayName: 'chronolens historical events batch today',
+      displayName: 'chronolens historical events batch today v2',
       instructions: BATCH_EVENT_TODAY_CACHE_INSTRUCTIONS,
       prompt: buildBatchEventPrompt(date),
       outputSchema: HistoricalEventsByCategorySchema,

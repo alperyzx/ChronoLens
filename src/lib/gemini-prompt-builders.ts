@@ -25,31 +25,36 @@ const EVENT_SELECTION_GUIDANCE = [
   'The count field tells the app how many events to publish from the ranked list.',
 ].join('\n');
 
+const HISTORICAL_YEAR_RULE = "Each event's date field must use the actual historical year the event occurred (e.g. 1965-08-11), never the request date or current year. The request date only supplies the month and day to match.";
+
 export function buildSingleEventPrompt(input: HistoricalEventPromptDateInput): string {
   return [
-    `Date: ${input.date}`,
+    `Request month/day (anchor only): ${input.date}`,
     `Category: ${input.category}`,
-    'Every returned event must match the exact same month and day as the requested date.',
+    'Every returned event must match the exact same month and day as the request date, but from its real historical year.',
+    HISTORICAL_YEAR_RULE,
     EVENT_SELECTION_GUIDANCE,
   ].join('\n');
 }
 
 export function buildSingleEventWeekPrompt(input: HistoricalEventPromptDateInput, weekInfo: HistoricalEventWeekInfo): string {
   return [
-    `Date: ${input.date}`,
+    `Request month/day (anchor only): ${input.date}`,
     `Week range: ${weekInfo.monthDay}`,
     `Start MM-DD: ${weekInfo.startDate}`,
     `End MM-DD: ${weekInfo.endDate}`,
     `Category: ${input.category}`,
-    'Every returned event must fall within the requested week range.',
+    'Every returned event must fall within the requested week range, but from its real historical year.',
+    HISTORICAL_YEAR_RULE,
     EVENT_SELECTION_GUIDANCE,
   ].join('\n');
 }
 
 export function buildBatchEventPrompt(date: string): string {
   return [
-    `Date: ${date}`,
-    'Every returned event must match the exact same month and day as the requested date.',
+    `Request month/day (anchor only): ${date}`,
+    'Every returned event must match the exact same month and day as the request date, but from its real historical year.',
+    HISTORICAL_YEAR_RULE,
     'Return a JSON object with exactly these keys: ' + HISTORICAL_EVENT_CATEGORIES.join(', '),
     'For each category, return a JSON object that follows this selection format:',
     EVENT_SELECTION_GUIDANCE,
@@ -58,11 +63,12 @@ export function buildBatchEventPrompt(date: string): string {
 
 export function buildBatchEventWeekPrompt(date: string, weekInfo: HistoricalEventWeekInfo): string {
   return [
-    `Date: ${date}`,
+    `Request month/day (anchor only): ${date}`,
     `Week range: ${weekInfo.monthDay}`,
     `Start MM-DD: ${weekInfo.startDate}`,
     `End MM-DD: ${weekInfo.endDate}`,
-    'Every returned event must fall within the requested week range.',
+    'Every returned event must fall within the requested week range, but from its real historical year.',
+    HISTORICAL_YEAR_RULE,
     'Return a JSON object with exactly these keys: ' + HISTORICAL_EVENT_CATEGORIES.join(', '),
     'For each category, return a JSON object that follows this selection format:',
     EVENT_SELECTION_GUIDANCE,
@@ -71,15 +77,15 @@ export function buildBatchEventWeekPrompt(date: string, weekInfo: HistoricalEven
 
 export function buildRefillEventPrompt(input: HistoricalEventRefillInput): string {
   const dateRule = input.weekInfo
-    ? `Every event must fall between ${input.weekInfo.startDate} and ${input.weekInfo.endDate} (MM-DD).`
-    : 'Every event must match the exact same month and day as the requested date.';
+    ? `Every event's month and day must fall between ${input.weekInfo.startDate} and ${input.weekInfo.endDate} (MM-DD), using its real historical year.`
+    : 'Every event must match the exact same month and day as the request date, using its real historical year (never the request date or current year).';
   const exclusions = input.excludedEvents.length > 0
     ? input.excludedEvents.map(event => `- ${event.category}: ${event.title} | ${event.source}`).join('\n')
     : '- None';
 
   return [
     'Generate replacement historical-event candidates for only the requested categories.',
-    `Date: ${input.date}`,
+    `Request month/day (anchor only): ${input.date}`,
     input.weekInfo ? `Week range: ${input.weekInfo.monthDay}` : '',
     `Categories: ${input.categories.join(', ')}`,
     dateRule,
