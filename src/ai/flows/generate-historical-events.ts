@@ -198,11 +198,9 @@ export type GenerateHistoricalEventRefillInput = {
   excludedEvents: Array<Pick<z.infer<typeof HistoricalEventSchema>, 'category' | 'title' | 'source'>>;
 };
 
-const HISTORICAL_EVENTS_GENERATION_MODEL = 'googleai/gemini-3-flash-preview';
+const SHARED_SINGLE_EVENT_CACHE_INSTRUCTIONS = `You are a passionate historian and educator specializing in the category provided in the live request.
 
-const SHARED_SINGLE_EVENT_CACHE_INSTRUCTIONS = `You are a passionate historian and educator specializing in historical events.
-
-Your mission is to inspire and enlighten readers by sharing remarkable historical events that demonstrate human achievement, innovation, resilience, and progress.
+Fully adopt the persona of an expert in that specific category. Your mission is to inspire and enlighten readers by sharing remarkable historical events in that category that demonstrate human achievement, innovation, resilience, and progress.
 
 Selection criteria:
 - Prioritize events that demonstrate human potential, progress, or resilience
@@ -458,7 +456,7 @@ const generateHistoricalEventsFlow = ai.defineFlow<
       const weekInfo = getWeekDateRange(date);
       const weekOutput = await generateHistoricalEventsWithCache({
         cacheId: 'historical-events-single-week',
-        displayName: 'chronolens historical events single week v2',
+        displayName: 'chronolens historical events single week v3',
         instructions: SINGLE_EVENT_WEEK_CACHE_INSTRUCTIONS,
         prompt: buildSingleEventWeekPrompt({ date, category: input.category }, weekInfo),
         outputSchema: GenerateHistoricalEventsOutputSchema,
@@ -470,7 +468,7 @@ const generateHistoricalEventsFlow = ai.defineFlow<
 
     const todayOutput = await generateHistoricalEventsWithCache({
       cacheId: 'historical-events-single-today',
-      displayName: 'chronolens historical events single today v2',
+      displayName: 'chronolens historical events single today v3',
       instructions: SINGLE_EVENT_TODAY_CACHE_INSTRUCTIONS,
       prompt: buildSingleEventPrompt(input),
       outputSchema: GenerateHistoricalEventsOutputSchema,

@@ -27,8 +27,13 @@ const EVENT_SELECTION_GUIDANCE = [
 
 const HISTORICAL_YEAR_RULE = "Each event's date field must use the actual historical year the event occurred (e.g. 1965-08-11), never the request date or current year. The request date only supplies the month and day to match.";
 
+function buildCategoryPersona(category: string): string {
+  return `You are a passionate historian and educator specializing in ${category}. Your mission is to inspire and enlighten readers by sharing remarkable historical events that demonstrate human achievement, innovation, resilience, and progress.`;
+}
+
 export function buildSingleEventPrompt(input: HistoricalEventPromptDateInput): string {
   return [
+    buildCategoryPersona(input.category),
     `Request month/day (anchor only): ${input.date}`,
     `Category: ${input.category}`,
     'Every returned event must match the exact same month and day as the request date, but from its real historical year.',
@@ -39,6 +44,7 @@ export function buildSingleEventPrompt(input: HistoricalEventPromptDateInput): s
 
 export function buildSingleEventWeekPrompt(input: HistoricalEventPromptDateInput, weekInfo: HistoricalEventWeekInfo): string {
   return [
+    buildCategoryPersona(input.category),
     `Request month/day (anchor only): ${input.date}`,
     `Week range: ${weekInfo.monthDay}`,
     `Start MM-DD: ${weekInfo.startDate}`,
