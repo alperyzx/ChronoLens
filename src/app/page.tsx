@@ -8,7 +8,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Footer } from "@/components/navigation";
-import { useHeaderShrink } from "@/hooks/use-header-shrink";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from "@/lib/historical-event-categories";
@@ -553,8 +552,8 @@ export default function Home() {
   const [hiddenContent, setHiddenContent] = useState<Record<string, boolean>>({});
   const [confirmReportEvent, setConfirmReportEvent] = useState<HistoricalEvent | null>(null);
   const categories = HISTORICAL_EVENT_CATEGORIES;
-  const baseHeaderShrunken = useHeaderShrink(100);
-  const isHeaderShrunken = baseHeaderShrunken;
+  const [isHeaderShrunken, setIsHeaderShrunken] = useState(false);
+  const isHeaderShrunkenRef = useRef(false);
   const isMobile = useIsMobile();
   const batchRetryTimerRef = useRef<number | null>(null);
   const swipeStartXRef = useRef<number | null>(null);
@@ -571,6 +570,44 @@ export default function Home() {
       batchRetryTimerRef.current = null;
     }
   };
+
+  useEffect(() => {
+    const threshold = 100;
+    let rafId: number;
+    let isScheduled = false;
+
+    const updateShrinkState = () => {
+      const scrollY = window.scrollY;
+      const nextIsShrunken = isHeaderShrunkenRef.current
+        ? scrollY > threshold - 20
+        : scrollY > threshold;
+
+      if (nextIsShrunken !== isHeaderShrunkenRef.current) {
+        isHeaderShrunkenRef.current = nextIsShrunken;
+        setIsHeaderShrunken(nextIsShrunken);
+      }
+    };
+
+    const handleScroll = () => {
+      if (!isScheduled) {
+        isScheduled = true;
+        rafId = requestAnimationFrame(() => {
+          updateShrinkState();
+          isScheduled = false;
+        });
+      }
+    };
+
+    updateShrinkState();
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    window.addEventListener("resize", handleScroll, { passive: true });
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("resize", handleScroll);
+    };
+  }, []);
 
   useEffect(() => {
     if (!selectedCategory) {
@@ -1221,7 +1258,8 @@ export default function Home() {
       
       {/* Header - Sticky with Responsive Design */}
       <div className={cn(
-        "sticky top-0 z-40 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 transition-all duration-300 ease-in-out will-change-padding select-none",
+        "sticky top-0 z-40 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 will-change-[padding] select-none",
+        isMobile ? "transition-none" : "transition-[padding] duration-200 ease-out",
         isTodayView
           ? "bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95"
           : "bg-gradient-to-br from-amber-50/95 via-orange-50/95 to-rose-50/95 dark:from-slate-900/95 dark:via-amber-950/40 dark:to-rose-950/40",
@@ -1234,24 +1272,27 @@ export default function Home() {
               <div className="flex items-center space-x-3 w-full justify-between">
                 <div className="flex items-center space-x-3">
                   <div className={cn(
-                    "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg transition-all duration-300 ease-in-out",
+                    "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg",
+                    !isMobile && "transition-all duration-300 ease-in-out",
                     isHeaderShrunken ? "w-6 h-6" : "w-8 h-8"
                   )}>
                     <svg className={cn(
-                      "text-white transition-all duration-300 ease-in-out",
+                      "text-white",
+                      !isMobile && "transition-all duration-300 ease-in-out",
                       isHeaderShrunken ? "w-3.5 h-3.5" : "w-5 h-5"
                     )} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                   <h1 className={cn(
-                    "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent transition-all duration-300 ease-in-out drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]",
+                    "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]",
+                    !isMobile && "transition-all duration-300 ease-in-out",
                     isHeaderShrunken ? "text-xl" : "text-3xl"
                   )}>
                     ChronoLens
                   </h1>
                   {isHeaderShrunken && (
-                    <span className="inline-flex items-center whitespace-nowrap rounded-full border border-slate-200/70 bg-white/70 px-2.5 py-0.5 text-[10px] font-medium text-slate-600 shadow-sm backdrop-blur-sm dark:border-slate-700/70 dark:bg-slate-800/70 dark:text-slate-300">
+                    <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-medium text-slate-700 shadow-sm backdrop-blur-sm dark:bg-slate-800/95 dark:text-slate-100">
                       {selectedPeriodLabel}
                     </span>
                   )}
@@ -1360,7 +1401,8 @@ export default function Home() {
               
               {/* Subtitle - Optional, minimal */}
               <div className={cn(
-                "overflow-hidden transition-all duration-300 ease-in-out",
+                "overflow-hidden",
+                !isMobile && "transition-all duration-300 ease-in-out",
                 isHeaderShrunken ? "max-h-0 opacity-0 mt-0" : "max-h-16 opacity-100 mt-1"
               )}>
                 <p className="text-slate-600 dark:text-slate-300 text-base select-none">
@@ -1373,7 +1415,13 @@ export default function Home() {
       </div>
       
       {/* Main Content */}
-      <div className="container mx-auto px-4 pb-8 relative z-10 flex-1" style={{ scrollPaddingTop: '96px' }}>
+      <div
+        className={cn(
+          "container mx-auto px-4 pb-8 relative z-10 flex-1",
+          isMobile && isHeaderShrunken && "translate-y-[54px] mb-[54px]"
+        )}
+        style={{ scrollPaddingTop: '96px' }}
+      >
         <div className="max-w-6xl mx-auto pt-4">
             {shouldShowWarmupBanner && (
             <div className="mb-6 flex justify-center" role="status" aria-live="polite">
