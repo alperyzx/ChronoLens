@@ -555,6 +555,7 @@ export default function Home() {
   const [isHeaderShrunken, setIsHeaderShrunken] = useState(false);
   const isHeaderShrunkenRef = useRef(false);
   const isMobile = useIsMobile();
+  const [usesCompactHeaderMotion, setUsesCompactHeaderMotion] = useState(false);
   const batchRetryTimerRef = useRef<number | null>(null);
   const swipeStartXRef = useRef<number | null>(null);
   const swipeStartYRef = useRef<number | null>(null);
@@ -607,6 +608,15 @@ export default function Home() {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleScroll);
     };
+  }, []);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(hover: none), (pointer: coarse), (max-width: 1023px)");
+    const updateHeaderMotionMode = () => setUsesCompactHeaderMotion(mediaQuery.matches);
+
+    updateHeaderMotionMode();
+    mediaQuery.addEventListener("change", updateHeaderMotionMode);
+    return () => mediaQuery.removeEventListener("change", updateHeaderMotionMode);
   }, []);
 
   useEffect(() => {
@@ -1259,7 +1269,7 @@ export default function Home() {
       {/* Header - Sticky with Responsive Design */}
       <div className={cn(
         "sticky top-0 z-40 backdrop-blur-lg border-b border-slate-200/20 dark:border-slate-700/20 will-change-[padding] select-none",
-        isMobile ? "transition-none" : "transition-[padding] duration-200 ease-out",
+        usesCompactHeaderMotion ? "transition-none" : "transition-[padding] duration-200 ease-out",
         isTodayView
           ? "bg-gradient-to-br from-slate-50/95 via-white/95 to-blue-50/95 dark:from-slate-900/95 dark:via-slate-800/95 dark:to-blue-900/95"
           : "bg-gradient-to-br from-amber-50/95 via-orange-50/95 to-rose-50/95 dark:from-slate-900/95 dark:via-amber-950/40 dark:to-rose-950/40",
@@ -1273,12 +1283,12 @@ export default function Home() {
                 <div className="flex items-center space-x-3">
                   <div className={cn(
                     "bg-gradient-to-br from-indigo-500 to-blue-600 rounded-xl flex items-center justify-center shadow-lg",
-                    !isMobile && "transition-all duration-300 ease-in-out",
+                    !usesCompactHeaderMotion && "transition-all duration-300 ease-in-out",
                     isHeaderShrunken ? "w-6 h-6" : "w-8 h-8"
                   )}>
                     <svg className={cn(
                       "text-white",
-                      !isMobile && "transition-all duration-300 ease-in-out",
+                      !usesCompactHeaderMotion && "transition-all duration-300 ease-in-out",
                       isHeaderShrunken ? "w-3.5 h-3.5" : "w-5 h-5"
                     )} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -1286,7 +1296,7 @@ export default function Home() {
                   </div>
                   <h1 className={cn(
                     "font-bold bg-gradient-to-r from-indigo-600 to-blue-600 dark:from-white dark:to-blue-200 bg-clip-text text-transparent drop-shadow-lg dark:drop-shadow-[0_2px_8px_rgba(0,0,0,0.7)]",
-                    !isMobile && "transition-all duration-300 ease-in-out",
+                    !usesCompactHeaderMotion && "transition-all duration-300 ease-in-out",
                     isHeaderShrunken ? "text-xl" : "text-3xl"
                   )}>
                     ChronoLens
@@ -1326,7 +1336,11 @@ export default function Home() {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 md:gap-3">
+                  <div className={cn(
+                    "flex origin-right items-center gap-2 md:gap-3",
+                    usesCompactHeaderMotion ? "transition-none" : "transition-transform duration-200 ease-out",
+                    isHeaderShrunken ? "scale-90" : "scale-100"
+                  )}>
                     <div className="h-8 w-8 md:h-10 md:w-10">
                       {showBackwardButton ? (
                         <button
@@ -1402,7 +1416,7 @@ export default function Home() {
               {/* Subtitle - Optional, minimal */}
               <div className={cn(
                 "overflow-hidden",
-                !isMobile && "transition-all duration-300 ease-in-out",
+                !usesCompactHeaderMotion && "transition-all duration-300 ease-in-out",
                 isHeaderShrunken ? "max-h-0 opacity-0 mt-0" : "max-h-16 opacity-100 mt-1"
               )}>
                 <p className="text-slate-600 dark:text-slate-300 text-base select-none">
@@ -1418,7 +1432,7 @@ export default function Home() {
       <div
         className={cn(
           "container mx-auto px-4 pb-8 relative z-10 flex-1",
-          isMobile && isHeaderShrunken && "translate-y-[54px] mb-[54px]"
+          usesCompactHeaderMotion && isHeaderShrunken && "translate-y-[54px] mb-[54px]"
         )}
         style={{ scrollPaddingTop: '96px' }}
       >
