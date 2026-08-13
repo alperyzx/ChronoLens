@@ -573,14 +573,14 @@ export default function Home() {
   };
 
   useEffect(() => {
-    const threshold = 100;
+    const threshold = 24;
     let rafId: number;
     let isScheduled = false;
 
     const updateShrinkState = () => {
       const scrollY = window.scrollY;
       const nextIsShrunken = isHeaderShrunkenRef.current
-        ? scrollY > threshold - 20
+        ? scrollY > 8
         : scrollY > threshold;
 
       if (nextIsShrunken !== isHeaderShrunkenRef.current) {
