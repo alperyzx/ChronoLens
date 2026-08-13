@@ -155,7 +155,7 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
           onClick={handleLogout}
           variant="outline"
           size="sm"
-          className="bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800"
+          className="h-8 rounded-full border-red-200 bg-red-50 px-3 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
         >
           Logout
         </Button>
