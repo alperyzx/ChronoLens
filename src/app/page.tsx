@@ -1,14 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef, type TouchEvent } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cloneElement, useState, useEffect, useRef, type TouchEvent } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Icons } from "@/components/icons";
-import { Switch } from "@/components/ui/switch";
-import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Footer } from "@/components/navigation";
 import { useHeaderShrink } from "@/hooks/use-header-shrink";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -57,6 +55,41 @@ type ClientCacheEntry<T> = {
   expiresAt: number;
   revision?: string;
 };
+
+function EventTitlePreview({ title, previewKey }: { title: string; previewKey: string }) {
+  const previewRef = useRef<HTMLParagraphElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  useEffect(() => {
+    const preview = previewRef.current;
+    if (!preview) {
+      return;
+    }
+
+    const updateOverflowState = () => {
+      setIsOverflowing(preview.scrollWidth > preview.clientWidth + 1);
+    };
+
+    updateOverflowState();
+    const resizeObserver = new ResizeObserver(updateOverflowState);
+    resizeObserver.observe(preview);
+
+    return () => resizeObserver.disconnect();
+  }, [title, previewKey]);
+
+  return (
+    <p
+      ref={previewRef}
+      key={previewKey}
+      className={cn(
+        "event-preview-roll mt-1 w-full max-w-[22rem] overflow-hidden whitespace-nowrap text-xs font-medium text-white/90 drop-shadow md:mt-2 md:text-sm",
+        isOverflowing && "event-preview-fade"
+      )}
+    >
+      {title}
+    </p>
+  );
+}
 
 const CLIENT_CACHE_PREFIX = "chronolens_client_events";
 const CLIENT_CACHE_VERSION = "v6";
@@ -370,18 +403,15 @@ const categoryIcons = {
   ),
 };
 
-// Add the missing link icon definition
-const linkIcon = <Icons.edit className="h-3 w-3 mr-1" />; // Using the edit icon as a replacement
-
 // Category Background Gradients - Modern themed gradients
 const categoryBackgrounds = {
   Sociology: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
   Technology: "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
   Philosophy: "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
-  Science: "linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)",
-  Politics: "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
-  Art: "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
-  Sports: "linear-gradient(135deg, #ff6b6b 0%, #feca57 100%)",
+  Science: "linear-gradient(135deg, #047857 0%, #0f766e 55%, #0891b2 100%)",
+  Politics: "linear-gradient(135deg, #334155 0%, #7f1d1d 100%)",
+  Art: "linear-gradient(135deg, #7c2d5b 0%, #c2416c 55%, #d97706 100%)",
+  Sports: "linear-gradient(135deg, #065f46 0%, #0f766e 100%)",
   Literature: "linear-gradient(135deg, #5f27cd 0%, #341f97 100%)",
 };
 
@@ -517,21 +547,22 @@ export default function Home() {
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
   const [showGeminiWarmup, setShowGeminiWarmup] = useState(false);
   const [cacheStatus, setCacheStatus] = useState<Record<string, boolean>>({});
-  const [openAccordions, setOpenAccordions] = useState<string[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<HistoricalEventCategory | null>(null);
   const [reportingContent, setReportingContent] = useState<Record<string, boolean>>({});
   const [reportedContent, setReportedContent] = useState<Record<string, boolean>>({});
   const [hiddenContent, setHiddenContent] = useState<Record<string, boolean>>({});
   const [confirmReportEvent, setConfirmReportEvent] = useState<HistoricalEvent | null>(null);
   const categories = HISTORICAL_EVENT_CATEGORIES;
-  // Use a simpler logic: expand header when all accordions are closed
   const baseHeaderShrunken = useHeaderShrink(100);
-  const isHeaderShrunken = baseHeaderShrunken && openAccordions.length > 0;
+  const isHeaderShrunken = baseHeaderShrunken;
   const isMobile = useIsMobile();
-  const accordionRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const batchRetryTimerRef = useRef<number | null>(null);
   const swipeStartXRef = useRef<number | null>(null);
   const swipeStartYRef = useRef<number | null>(null);
+  const mobileToggleTapTimerRef = useRef<number | null>(null);
+  const ignoreMobileToggleClickRef = useRef(false);
   const [warmupCategoryIndex, setWarmupCategoryIndex] = useState(0);
+  const [eventPreviewIndices, setEventPreviewIndices] = useState<Partial<Record<HistoricalEventCategory, number>>>({});
   const { toast } = useToast();
 
   const clearBatchRetryTimer = () => {
@@ -541,34 +572,19 @@ export default function Home() {
     }
   };
 
-  // Handle accordion value changes and smooth scroll
-  const handleAccordionChange = (value: string[]) => {
-    const newlyOpened = value.filter(v => !openAccordions.includes(v));
-    setOpenAccordions(value);
-    
-    // If a new accordion was opened, scroll it to the top
-    if (newlyOpened.length > 0) {
-      const newAccordion = newlyOpened[0];
-      const element = accordionRefs.current[newAccordion];
-      if (element) {
-        // Add a small delay to allow the accordion to open
-        setTimeout(() => {
-          const rect = element.getBoundingClientRect();
-          const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-          // Dynamic header height based on shrink state
-          const headerHeight = isHeaderShrunken ? 64 : 96; // py-2 = 16px*2, py-4 = 24px*2, plus content
-          const padding = 20; // Additional spacing
-          const targetPosition = rect.top + scrollTop - headerHeight - padding;
-          
-          window.scrollTo({
-            top: Math.max(0, targetPosition), // Ensure we don't scroll to negative position
-            behavior: 'smooth'
-          });
-        }, 150);
-      }
+  useEffect(() => {
+    if (!selectedCategory) {
+      return;
     }
-  };
-  
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [selectedCategory]);
+
   useEffect(() => {
     // Load saved view preference
     if (typeof window !== "undefined") {
@@ -624,6 +640,9 @@ export default function Home() {
   useEffect(() => {
     return () => {
       clearBatchRetryTimer();
+      if (mobileToggleTapTimerRef.current !== null) {
+        window.clearTimeout(mobileToggleTapTimerRef.current);
+      }
     };
   }, []);
 
@@ -658,6 +677,30 @@ export default function Home() {
       window.clearInterval(intervalId);
     };
   }, [shouldShowWarmupBanner, categories.length]);
+
+  useEffect(() => {
+    const intervalIds: number[] = [];
+    const timeoutIds: number[] = [];
+
+    categories.forEach(category => {
+      const staggerDelay = Math.floor(Math.random() * 3500);
+      const startRotation = () => {
+        intervalIds.push(window.setInterval(() => {
+          setEventPreviewIndices(currentIndices => ({
+            ...currentIndices,
+            [category]: (currentIndices[category] ?? 0) + 1,
+          }));
+        }, 5000));
+      };
+
+      timeoutIds.push(window.setTimeout(startRotation, staggerDelay));
+    });
+
+    return () => {
+      timeoutIds.forEach(window.clearTimeout);
+      intervalIds.forEach(window.clearInterval);
+    };
+  }, [categories]);
 
   const fetchCategoryEvents = async (category: string) => {
     setLoadingCategories(prev => ({ ...prev, [category]: true }));
@@ -765,6 +808,39 @@ export default function Home() {
     setIsTodayView(!isTodayView);
   };
 
+  const jumpToLatestPeriod = () => {
+    clearBatchRetryTimer();
+    setSelectedDayOffset(0);
+    setSelectedWeekOffset(0);
+  };
+
+  const handleMobileToggleTouchEnd = (event: TouchEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    ignoreMobileToggleClickRef.current = true;
+
+    if (mobileToggleTapTimerRef.current !== null) {
+      window.clearTimeout(mobileToggleTapTimerRef.current);
+      mobileToggleTapTimerRef.current = null;
+      jumpToLatestPeriod();
+      return;
+    }
+
+    mobileToggleTapTimerRef.current = window.setTimeout(() => {
+      mobileToggleTapTimerRef.current = null;
+      toggleView();
+    }, 250);
+  };
+
+  const handleMobileToggleClick = () => {
+    if (ignoreMobileToggleClickRef.current) {
+      ignoreMobileToggleClickRef.current = false;
+      return;
+    }
+
+    toggleView();
+  };
+
   const activeViewLabel = isTodayView ? "Today View" : "Week View";
   const nextViewLabel = isTodayView ? "Switch to Week View" : "Switch to Today View";
   const selectedPeriodLabel = isTodayView
@@ -793,7 +869,7 @@ export default function Home() {
     setSelectedWeekOffset(current => Math.max(0, current - 1));
   };
 
-  const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+  const handleTouchStart = (event: TouchEvent<HTMLElement>) => {
     if (!isMobile) {
       return;
     }
@@ -803,7 +879,7 @@ export default function Home() {
     swipeStartYRef.current = touch.clientY;
   };
 
-  const handleTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+  const handleTouchEnd = (event: TouchEvent<HTMLElement>) => {
     if (!isMobile || swipeStartXRef.current === null || swipeStartYRef.current === null) {
       return;
     }
@@ -1184,46 +1260,49 @@ export default function Home() {
                 {isMobile ? (
                   <div className="flex justify-end flex-shrink-0">
                     <button
-                      onClick={toggleView}
-                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-3 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
-                      title={nextViewLabel}
+                      onClick={handleMobileToggleClick}
+                      onDoubleClick={jumpToLatestPeriod}
+                      onTouchEnd={handleMobileToggleTouchEnd}
+                      className="group relative flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-3 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                      title={`${nextViewLabel}. Double-tap to return to the latest ${isTodayView ? "day" : "week"}.`}
                     >
+                      <span className="swipe-date-hint" aria-hidden="true" />
                       {isTodayView ? (
-                        <>
+                        <span className="relative flex items-center gap-1.5">
                           <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
                           </svg>
                           <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
-                        </>
+                        </span>
                       ) : (
-                        <>
+                        <span className="relative flex items-center gap-1.5">
                           <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
                           </svg>
                           <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
-                        </>
+                        </span>
                       )}
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
-                    <div className="h-8 w-8">
+                  <div className="flex items-center gap-2 md:gap-3">
+                    <div className="h-8 w-8 md:h-10 md:w-10">
                       {showBackwardButton ? (
                         <button
                           type="button"
                           onClick={goBackward}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md md:h-10 md:w-10 dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-label={isTodayView ? "Previous day" : "Previous week"}
                           title={isTodayView ? "Previous day" : "Previous week"}
                         >
-                          <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-3.5 w-3.5 text-slate-700 md:h-4 md:w-4 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                           </svg>
                         </button>
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="pointer-events-none invisible inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm md:h-10 md:w-10 dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-hidden="true"
                           tabIndex={-1}
                         />
@@ -1232,43 +1311,44 @@ export default function Home() {
 
                     <button 
                       onClick={toggleView}
-                      className="flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70 group"
-                      title={nextViewLabel}
+                      onDoubleClick={jumpToLatestPeriod}
+                      className="group flex items-center gap-1.5 rounded-full border border-white/50 bg-white/60 px-2.5 py-1.5 shadow-sm backdrop-blur-sm transition-all duration-200 hover:shadow-md md:gap-2 md:px-4 md:py-2 dark:border-slate-700/60 dark:bg-slate-800/70"
+                      title={`${nextViewLabel}. Double-click to return to the latest ${isTodayView ? "day" : "week"}.`}
                     >
                       {isTodayView ? (
                         <>
-                          <svg className="w-3.5 h-3.5 text-amber-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-3.5 w-3.5 text-amber-500 transition-transform group-hover:scale-110 md:h-4 md:w-4" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5z"/>
                           </svg>
-                          <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Today</span>
+                          <span className="text-[11px] font-semibold text-amber-600 md:text-sm dark:text-amber-400">Today</span>
                         </>
                       ) : (
                         <>
-                          <svg className="w-3.5 h-3.5 text-blue-500 group-hover:scale-110 transition-transform" fill="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-3.5 w-3.5 text-blue-500 transition-transform group-hover:scale-110 md:h-4 md:w-4" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11zm-6-7h-2v2h2v-2zm0-4h-2v2h2V8zm4 4h-2v2h2v-2zm0-4h-2v2h2V8zM9 8H7v2h2V8zm0 4H7v2h2v-2z"/>
                           </svg>
-                          <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Week</span>
+                          <span className="text-[11px] font-semibold text-blue-600 md:text-sm dark:text-blue-400">Week</span>
                         </>
                       )}
                     </button>
 
-                    <div className="h-8 w-8 justify-self-end">
+                    <div className="h-8 w-8 justify-self-end md:h-10 md:w-10">
                       {canGoForward ? (
                         <button
                           type="button"
                           onClick={goForward}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-200 hover:scale-[1.03] hover:shadow-md md:h-10 md:w-10 dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-label={isTodayView ? "Next day" : "This week"}
                           title={isTodayView ? "Next day" : "This week"}
                         >
-                          <svg className="h-3.5 w-3.5 text-slate-700 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="h-3.5 w-3.5 text-slate-700 md:h-4 md:w-4 dark:text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                           </svg>
                         </button>
                       ) : (
                         <button
                           type="button"
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm invisible pointer-events-none dark:border-slate-700/60 dark:bg-slate-800/70"
+                          className="pointer-events-none invisible inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/50 bg-white/60 shadow-sm backdrop-blur-sm md:h-10 md:w-10 dark:border-slate-700/60 dark:bg-slate-800/70"
                           aria-hidden="true"
                           tabIndex={-1}
                         />
@@ -1354,24 +1434,18 @@ export default function Home() {
               </div>
               )}
               <div className={cn("w-full", shouldShowWarmupBanner && "hidden")}>
-              <Accordion 
-                type="multiple" 
-                className="space-y-4"
-                value={openAccordions}
-                onValueChange={handleAccordionChange}
-              >
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {categories.map((category) => (
-                <AccordionItem 
-                  key={category} 
-                  value={category} 
-                  className="border-0"
-                  data-accordion-item
-                  ref={(el) => { accordionRefs.current[category] = el; }}
-                >
-                  <Card className="overflow-hidden border-0 shadow-lg bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm hover:shadow-xl transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5">
-                    <AccordionTrigger className="hover:no-underline p-0 [&>svg]:hidden [&[data-state=open]>div>div>div:last-child>div:last-child>svg]:rotate-180">
+                <Dialog key={category} open={selectedCategory === category} onOpenChange={(open) => setSelectedCategory(open ? category : null)}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedCategory(category)}
+                    className="group w-full overflow-hidden rounded-xl text-left shadow-lg outline-none transition-[transform,box-shadow] duration-300 hover:-translate-y-0.5 hover:shadow-xl focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950"
+                    aria-label={`View ${category} historical events`}
+                  >
+                    <Card className="overflow-hidden border border-white/50 bg-white/80 dark:border-white/10 dark:bg-[#1e1e1e]">
                       <div 
-                        className="relative h-16 md:h-20 overflow-hidden w-full"
+                        className="relative h-24 w-full overflow-hidden md:h-36 lg:h-40"
                         style={{
                           background: categoryBackgrounds[category as keyof typeof categoryBackgrounds],
                         }}
@@ -1381,35 +1455,96 @@ export default function Home() {
                         
                         {/* Category header */}
                         <div className="absolute inset-0 flex items-center justify-between p-3 md:p-4">
-                          <div className="flex items-center space-x-3">
-                            <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center border border-white/30">
+                          <div className="flex w-full min-w-0 items-center space-x-3">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/30 bg-white/20 backdrop-blur-sm md:h-12 md:w-12">
                               {categoryIcons[category as keyof typeof categoryIcons]}
                             </div>
-                            <div>
-                              <h2 className="text-xl font-bold text-white drop-shadow-lg">
+                            <div className="min-w-0 flex-1">
+                              <h2 className="text-xl font-bold text-white drop-shadow-lg md:text-2xl">
                                 {category}
                               </h2>
-                              <p className="text-white/80 text-xs text-left">
-                                {loadingCategories[category] ? "Loading events..." : historicalEvents[category] ? `${historicalEvents[category]?.count || 0} events` : "No events found"}
-                              </p>
+                              {loadingCategories[category] && (
+                                <p className="text-left text-xs text-white/80 md:text-sm">Loading events...</p>
+                              )}
+                              {!loadingCategories[category] && getRenderableEvents(historicalEvents[category]).length > 0 && (
+                                <EventTitlePreview
+                                  key={`${category}-${(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length}`}
+                                  previewKey={`${category}-${(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length}`}
+                                  title={getRenderableEvents(historicalEvents[category])[(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length].title}
+                                />
+                              )}
                             </div>
                           </div>
                           
-                          <div className="flex items-center space-x-2">
-                            {/* Custom subtle expand/collapse arrow */}
-                            <div className="w-6 h-6 bg-white/15 backdrop-blur-sm rounded-md flex items-center justify-center border border-white/20">
-                              <svg className="w-3 h-3 text-white/90 transition-transform duration-300 ease-out" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M6 9l6 6 6-6" />
-                              </svg>
-                            </div>
-                          </div>
                         </div>
                       </div>
-                    </AccordionTrigger>
-                    
-                    {/* Content */}
-                    <AccordionContent className="p-0">
-                      <div className="p-4">
+                    </Card>
+                  </button>
+
+                  <DialogContent className="flex h-[85vh] w-[90%] max-w-[800px] flex-col gap-0 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-0 shadow-2xl dark:border-white/10 dark:bg-[#121212]">
+                    <DialogHeader className="sticky top-0 z-10 flex-row items-center justify-between space-y-0 border-b border-slate-200 bg-slate-50/95 px-5 py-5 text-left backdrop-blur sm:px-8 sm:py-6 dark:border-white/10 dark:bg-[#121212]/95">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/30 shadow-sm"
+                          style={{ background: categoryBackgrounds[category as keyof typeof categoryBackgrounds] }}
+                          aria-hidden="true"
+                        >
+                          {cloneElement(categoryIcons[category as keyof typeof categoryIcons], {
+                            className: cn(
+                              "h-6 w-6 text-white",
+                            ),
+                          })}
+                        </div>
+                        <div className="min-w-0">
+                          <DialogTitle className="text-2xl font-bold text-slate-950 dark:text-slate-50">{category}</DialogTitle>
+                          {loadingCategories[category] && (
+                            <DialogDescription className="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">
+                              Loading historical events...
+                            </DialogDescription>
+                          )}
+                        </div>
+                      </div>
+                      <div
+                        className="relative flex shrink-0 touch-pan-y select-none items-center rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm md:hidden dark:border-white/10 dark:bg-white/5 dark:text-slate-200"
+                        onTouchStart={handleTouchStart}
+                        onTouchEnd={handleTouchEnd}
+                        onTouchCancel={handleTouchCancel}
+                        aria-label={`${selectedPeriodLabel}. Swipe left or right to change ${isTodayView ? "day" : "week"}.`}
+                      >
+                        <span className="swipe-date-hint" aria-hidden="true" />
+                        <span className="relative whitespace-nowrap">{selectedPeriodLabel}</span>
+                      </div>
+                      <div className="hidden shrink-0 items-center rounded-full border border-slate-200 bg-white/80 p-0.5 shadow-sm md:flex dark:border-white/10 dark:bg-white/5">
+                          <button
+                            type="button"
+                            onClick={goBackward}
+                            disabled={!showBackwardButton}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-35 dark:text-slate-200 dark:hover:bg-white/10"
+                            aria-label={isTodayView ? "Previous day" : "Previous week"}
+                            title={isTodayView ? "Previous day" : "Previous week"}
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                            </svg>
+                          </button>
+                          <span className="inline-flex h-8 items-center whitespace-nowrap border-x border-slate-200 px-2.5 text-xs font-medium text-slate-600 dark:border-white/10 dark:text-slate-200">
+                            {selectedPeriodLabel}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={goForward}
+                            disabled={!canGoForward}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-35 dark:text-slate-200 dark:hover:bg-white/10"
+                            aria-label={isTodayView ? "Next day" : "Next week"}
+                            title={isTodayView ? "Next day" : "Next week"}
+                          >
+                            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                          </button>
+                      </div>
+                    </DialogHeader>
+                    <div className="p-5 sm:p-8">
                         {loadingCategories[category] ? (
                           <div className="space-y-3">
                             {[...Array(3)].map((_, index) => (
@@ -1533,11 +1668,10 @@ export default function Home() {
                           </div>
                         )}
                       </div>
-                    </AccordionContent>
-                  </Card>
-                </AccordionItem>
+                  </DialogContent>
+                </Dialog>
               ))}
-            </Accordion>
+              </div>
               </div>
           </div>
         </div>
@@ -1545,20 +1679,20 @@ export default function Home() {
       
       {/* Report Confirmation Dialog */}
       <AlertDialog open={!!confirmReportEvent} onOpenChange={(open) => !open && setConfirmReportEvent(null)}>
-        <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader className="space-y-2">
-            <AlertDialogTitle className="text-lg">Report Content</AlertDialogTitle>
-            <AlertDialogDescription className="text-sm leading-relaxed">
+        <AlertDialogContent className="w-[calc(100%-2rem)] max-w-sm rounded-2xl border-slate-200 bg-white/95 p-5 shadow-2xl backdrop-blur-xl sm:p-6 dark:border-white/10 dark:bg-[#1e1e1e]/95">
+          <AlertDialogHeader className="space-y-1.5 text-left">
+            <AlertDialogTitle className="text-base sm:text-lg">Report content</AlertDialogTitle>
+            <AlertDialogDescription className="text-xs leading-relaxed sm:text-sm">
               Report <strong>"{confirmReportEvent?.title}"</strong> as inappropriate?
               <br />
               Multiple reports may hide this content.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex gap-2 pt-2">
-            <AlertDialogCancel className="flex-1 h-9">Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="flex-row justify-end gap-2 pt-2">
+            <AlertDialogCancel className="mt-0 h-8 flex-1 text-xs sm:h-9 sm:text-sm">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmReportContent}
-              className="flex-1 h-9 bg-red-600 hover:bg-red-700 text-white"
+              className="h-8 flex-1 border border-rose-200 bg-rose-100 text-xs text-rose-700 hover:bg-rose-200 sm:h-9 sm:text-sm dark:border-rose-900/60 dark:bg-rose-900/30 dark:text-rose-200 dark:hover:bg-rose-900/50"
             >
               Report
             </AlertDialogAction>

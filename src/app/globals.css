@@ -132,6 +132,21 @@
   .shadow-glow-lg {
     box-shadow: 0 0 40px rgba(99, 102, 241, 0.35);
   }
+
+  .swipe-date-hint {
+    position: absolute;
+    inset: 3px;
+    border-radius: 9999px;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    opacity: 0;
+    pointer-events: none;
+    animation: swipe-date-hint 10s ease-in-out infinite;
+  }
+
+  .event-preview-roll {
+    transform-origin: center;
+    animation: event-preview-roll 5s cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
 }
 
 @keyframes float {
@@ -149,5 +164,51 @@
   }
   to {
     box-shadow: 0 0 30px rgba(99, 102, 241, 0.5);
+  }
+}
+
+@keyframes swipe-date-hint {
+  0%, 20%, 100% {
+    opacity: 0;
+    transform: translateX(0) scale(0.96);
+  }
+  8% {
+    opacity: 0.7;
+    transform: translateX(-5px) scale(1);
+  }
+  14% {
+    opacity: 0.45;
+    transform: translateX(5px) scale(1);
+  }
+}
+
+@keyframes event-preview-roll {
+  0% {
+    opacity: 0;
+    transform: perspective(320px) rotateX(-72deg) translateY(-0.35rem);
+  }
+  14% {
+    opacity: 1;
+    transform: perspective(320px) rotateX(0deg) translateY(0);
+  }
+  78% {
+    opacity: 1;
+    transform: perspective(320px) rotateX(0deg) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: perspective(320px) rotateX(68deg) translateY(0.35rem);
+  }
+}
+
+.event-preview-fade {
+  mask-image: linear-gradient(to right, black 0%, black 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black 0%, black 85%, transparent 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .swipe-date-hint,
+  .event-preview-roll {
+    animation: none;
   }
 }

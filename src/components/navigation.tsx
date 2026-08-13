@@ -2,10 +2,31 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+
+function useNavigationVisibility() {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    let lastScrollY = window.scrollY;
+
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      setIsVisible(currentScrollY < 24 || currentScrollY <= lastScrollY);
+      lastScrollY = currentScrollY;
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  return isVisible;
+}
 
 export function Navigation() {
   const pathname = usePathname();
+  const isVisible = useNavigationVisibility();
 
   // Don't render navigation if on home page (no content to show)
   if (pathname === "/") {
@@ -13,11 +34,10 @@ export function Navigation() {
   }
 
   return (
-    <nav className="fixed top-4 right-4 z-50">
-      <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-2xl p-2 shadow-lg">
-        <div className="flex items-center space-x-2">
+    <nav className={`fixed left-1/2 top-4 z-50 w-full max-w-6xl -translate-x-1/2 px-6 transition-all duration-200 ${isVisible ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0 pointer-events-none"}`}>
+      <div className="ml-auto flex w-fit items-center gap-1 rounded-full border border-white/50 bg-white/60 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-800/70">
           <Link href="/">
-            <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-900/20">
+            <Button variant="ghost" size="sm" className="h-8 rounded-full px-3 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 dark:text-indigo-400 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-300">
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
@@ -25,7 +45,6 @@ export function Navigation() {
             </Button>
           </Link>
           {/* Admin button hidden as requested */}
-        </div>
       </div>
     </nav>
   );
@@ -37,17 +56,17 @@ export function NavigationShell({
   children?: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const isVisible = useNavigationVisibility();
 
   if (pathname === "/") {
     return null;
   }
 
   return (
-    <nav className="fixed top-4 right-4 z-50">
-      <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-200 dark:border-slate-700 rounded-2xl p-2 shadow-lg">
-        <div className="flex items-center space-x-2">
+    <nav className={`fixed left-1/2 top-4 z-50 w-full max-w-6xl -translate-x-1/2 px-6 transition-all duration-200 ${isVisible ? "translate-y-0 opacity-100" : "-translate-y-4 opacity-0 pointer-events-none"}`}>
+      <div className="ml-auto flex w-fit items-center gap-1 rounded-full border border-white/50 bg-white/60 p-1 shadow-sm backdrop-blur-sm dark:border-slate-700/60 dark:bg-slate-800/70">
           <Link href="/">
-            <Button variant="ghost" size="sm" className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:text-indigo-300 dark:hover:bg-indigo-900/20">
+            <Button variant="ghost" size="sm" className="h-8 rounded-full px-3 text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700 dark:text-indigo-400 dark:hover:bg-indigo-900/20 dark:hover:text-indigo-300">
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
@@ -55,7 +74,6 @@ export function NavigationShell({
             </Button>
           </Link>
           {children}
-        </div>
       </div>
     </nav>
   );

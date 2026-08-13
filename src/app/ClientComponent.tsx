@@ -26,8 +26,12 @@ export default function ClientComponent({ children }: { children: React.ReactNod
         }
     }, []);
 
+    useEffect(() => {
+        document.documentElement.classList.toggle('dark', isDarkMode);
+    }, [isDarkMode]);
+
     return (
-        <div className={isDarkMode ? 'dark' : ''}>
+        <div>
             {children}
             <Toaster />
         </div>
