@@ -140,7 +140,12 @@
     border: 1px solid rgba(99, 102, 241, 0.35);
     opacity: 0;
     pointer-events: none;
-    animation: swipe-date-hint 3.5s ease-in-out infinite;
+    animation: swipe-date-hint 10s ease-in-out infinite;
+  }
+
+  .event-preview-roll {
+    transform-origin: center;
+    animation: event-preview-roll 5s cubic-bezier(0.4, 0, 0.2, 1) both;
   }
 }
 
@@ -177,8 +182,33 @@
   }
 }
 
+@keyframes event-preview-roll {
+  0% {
+    opacity: 0;
+    transform: perspective(320px) rotateX(-72deg) translateY(-0.35rem);
+  }
+  14% {
+    opacity: 1;
+    transform: perspective(320px) rotateX(0deg) translateY(0);
+  }
+  78% {
+    opacity: 1;
+    transform: perspective(320px) rotateX(0deg) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: perspective(320px) rotateX(68deg) translateY(0.35rem);
+  }
+}
+
+.event-preview-fade {
+  mask-image: linear-gradient(to right, black 0%, black 85%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black 0%, black 85%, transparent 100%);
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .swipe-date-hint {
+  .swipe-date-hint,
+  .event-preview-roll {
     animation: none;
   }
 }
