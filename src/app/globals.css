@@ -86,6 +86,11 @@
   /* Apply scroll anchoring disable to all scrollable containers */
   html {
     overflow-anchor: none;
+    scrollbar-width: none;
+  }
+
+  html::-webkit-scrollbar {
+    display: none;
   }
 }
 
