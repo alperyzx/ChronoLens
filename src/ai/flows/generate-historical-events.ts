@@ -414,7 +414,11 @@ export async function generateHistoricalEventRefill(input: GenerateHistoricalEve
       }),
       outputSchema: HistoricalEventRefillSchema,
     });
-    const requestedCategories = new Set(input.categories);
+    const requestedCategories = new Set(
+      input.categories.filter((category): category is HistoricalEventCategory =>
+        HISTORICAL_EVENT_CATEGORIES.includes(category)
+      )
+    );
     const selections = emptyCategorySelectionMap();
 
     for (const event of output?.events || []) {
@@ -423,7 +427,7 @@ export async function generateHistoricalEventRefill(input: GenerateHistoricalEve
       }
     }
 
-    for (const category of input.categories) {
+    for (const category of requestedCategories) {
       selections[category].count = 3;
     }
 
