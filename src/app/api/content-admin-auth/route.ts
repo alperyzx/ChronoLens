@@ -4,7 +4,7 @@ import {
   createAdminSession,
   hasValidAdminSession,
   verifyPassword,
-} from '@/lib/content-admin-auth';
+} from '../../../lib/content-admin-auth';
 
 export async function POST(request: NextRequest) {
   try {

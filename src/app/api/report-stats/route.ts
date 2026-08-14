@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getReportStats, getAllReportedContent, clearAllReports, recoverReportedContent, isContentHidden } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES } from '@/lib/historical-event-categories';
-import { requireContentAdmin } from '@/lib/content-admin-auth';
+import { requireContentAdmin } from '../../../lib/content-admin-auth';
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireContentAdmin(request);

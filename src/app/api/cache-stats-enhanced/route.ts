@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCacheStats, clearCache, getCacheExpirationInfo, cleanupExpiredCache } from '@/lib/cache';
-import { requireContentAdmin } from '@/lib/content-admin-auth';
+import { requireContentAdmin } from '../../../lib/content-admin-auth';
 
 export async function GET(request: NextRequest) {
   const unauthorized = requireContentAdmin(request);
