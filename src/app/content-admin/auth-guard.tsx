@@ -8,9 +8,10 @@ import { Navigation, NavigationShell, Footer } from '@/components/navigation';
 
 interface AuthGuardProps {
   children: React.ReactNode;
+  onAuthenticationChange?: (authenticated: boolean) => void;
 }
 
-export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
+export function ContentAdminAuthGuard({ children, onAuthenticationChange }: AuthGuardProps) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -19,9 +20,16 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
   useEffect(() => {
     fetch('/api/content-admin-auth')
       .then(response => response.json())
-      .then(data => setIsAuthenticated(data.authenticated === true))
-      .catch(() => setIsAuthenticated(false));
-  }, []);
+      .then(data => {
+        const authenticated = data.authenticated === true;
+        setIsAuthenticated(authenticated);
+        onAuthenticationChange?.(authenticated);
+      })
+      .catch(() => {
+        setIsAuthenticated(false);
+        onAuthenticationChange?.(false);
+      });
+  }, [onAuthenticationChange]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +47,7 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
 
       if (response.ok && data.authenticated) {
         setIsAuthenticated(true);
+        onAuthenticationChange?.(true);
         setPassword('');
         setError('');
       } else {
@@ -56,6 +65,7 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
   const handleLogout = async () => {
     await fetch('/api/content-admin-auth', { method: 'DELETE' });
     setIsAuthenticated(false);
+    onAuthenticationChange?.(false);
     setPassword('');
     setError('');
   };

@@ -64,6 +64,7 @@ export default function ContentAdmin() {
   const [clearingReports, setClearingReports] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [recoveringKey, setRecoveringKey] = useState<string | null>(null);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(false);
 
   const fetchStats = async () => {
     setLoading(true);
@@ -204,10 +205,14 @@ export default function ContentAdmin() {
   };
 
   useEffect(() => {
+    if (!isAdminAuthenticated) {
+      return;
+    }
+
     fetchStats();
     fetchReportStats();
     fetchReportedContent();
-  }, []);
+  }, [isAdminAuthenticated]);
 
   const adminContent = (
     <>
@@ -554,7 +559,7 @@ export default function ContentAdmin() {
   );
 
   return (
-    <ContentAdminAuthGuard>
+    <ContentAdminAuthGuard onAuthenticationChange={setIsAdminAuthenticated}>
       {adminContent}
     </ContentAdminAuthGuard>
   );
