@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { reportContent } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES } from '@/lib/historical-event-categories';
+import { createReportVisitorCookie, getVerifiedReportVisitorId, REPORT_VISITOR_COOKIE } from '@/lib/report-visitor';
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       reportCount: result.reportCount,
       isHidden: result.isHidden,
@@ -41,6 +42,21 @@ export async function POST(request: NextRequest) {
         ? 'Content has been hidden due to multiple reports'
         : 'Content reported successfully'
     });
+
+    if (!getVerifiedReportVisitorId(request)) {
+      const visitorCookie = createReportVisitorCookie();
+      if (visitorCookie) {
+        response.cookies.set(REPORT_VISITOR_COOKIE, visitorCookie.value, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax',
+          path: '/',
+          maxAge: visitorCookie.maxAge,
+        });
+      }
+    }
+
+    return response;
 
   } catch (error) {
     console.error('Error in report content API:', error);
