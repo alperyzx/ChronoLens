@@ -542,6 +542,7 @@ export default function Home() {
   const [isTodayView, setIsTodayView] = useState(true);
   const [selectedDayOffset, setSelectedDayOffset] = useState(0);
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
+  const [navigationRevision, setNavigationRevision] = useState(0);
   const [historicalEvents, setHistoricalEvents] = useState<CategoryEvents>({});
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
   const [showGeminiWarmup, setShowGeminiWarmup] = useState(false);
@@ -557,10 +558,11 @@ export default function Home() {
   const isMobile = useIsMobile();
   const [usesCompactHeaderMotion, setUsesCompactHeaderMotion] = useState(false);
   const batchRetryTimerRef = useRef<number | null>(null);
+  const batchFetchRequestIdRef = useRef(0);
   const swipeStartXRef = useRef<number | null>(null);
   const swipeStartYRef = useRef<number | null>(null);
   const mobileToggleTapTimerRef = useRef<number | null>(null);
-  const ignoreMobileToggleClickRef = useRef(false);
+  const ignoreMobileToggleClickUntilRef = useRef(0);
   const [warmupCategoryIndex, setWarmupCategoryIndex] = useState(0);
   const [eventPreviewIndices, setEventPreviewIndices] = useState<Partial<Record<HistoricalEventCategory, number>>>({});
   const { toast } = useToast();
@@ -771,6 +773,7 @@ export default function Home() {
   };
 
   const fetchAllEvents = async () => {
+    const requestId = ++batchFetchRequestIdRef.current;
     const viewType = isTodayView ? 'today' : 'week';
     const dateString = getSelectedPeriodDateString(isTodayView, selectedDayOffset, selectedWeekOffset);
     const clientCacheKey = getClientCacheKey('batch', viewType, dateString);
@@ -784,6 +787,11 @@ export default function Home() {
         const metadataResponse = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}&metadataOnly=1`);
         if (metadataResponse.ok) {
           const metadata = await metadataResponse.json();
+          if (requestId !== batchFetchRequestIdRef.current) {
+            setLoadingCategories({});
+            return;
+          }
+
           if (metadata?.generationRequired === true) {
             setShowGeminiWarmup(true);
             shouldKeepWarmupVisible = true;
@@ -806,6 +814,11 @@ export default function Home() {
     
     try {
       const {eventsByCategory, cached} = await getHistoricalEventsForAllCategories(isTodayView, dateString);
+      if (requestId !== batchFetchRequestIdRef.current) {
+        setLoadingCategories({});
+        return;
+      }
+
       const hasCompleteEvents = hasCompleteHistoricalEventsByCategory(eventsByCategory);
 
       setHistoricalEvents(prev => ({
@@ -831,6 +844,11 @@ export default function Home() {
     } catch (error) {
       console.error('Failed to fetch all categories', error);
     } finally {
+      if (requestId !== batchFetchRequestIdRef.current) {
+        setLoadingCategories({});
+        return;
+      }
+
       if (!shouldKeepWarmupVisible) {
         setShowGeminiWarmup(false);
       }
@@ -847,8 +865,8 @@ export default function Home() {
   };
 
   useEffect(() => {
-    fetchAllEvents();
-  }, [isTodayView, selectedDayOffset, selectedWeekOffset]);
+    void fetchAllEvents();
+  }, [isTodayView, selectedDayOffset, selectedWeekOffset, navigationRevision]);
 
   const toggleView = () => {
     clearBatchRetryTimer();
@@ -857,14 +875,17 @@ export default function Home() {
 
   const jumpToLatestPeriod = () => {
     clearBatchRetryTimer();
+    batchFetchRequestIdRef.current += 1;
+    setShowGeminiWarmup(false);
     setSelectedDayOffset(0);
     setSelectedWeekOffset(0);
+    setNavigationRevision(currentRevision => currentRevision + 1);
   };
 
   const handleMobileToggleTouchEnd = (event: TouchEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
-    ignoreMobileToggleClickRef.current = true;
+    ignoreMobileToggleClickUntilRef.current = Date.now() + 700;
 
     if (mobileToggleTapTimerRef.current !== null) {
       window.clearTimeout(mobileToggleTapTimerRef.current);
@@ -876,12 +897,11 @@ export default function Home() {
     mobileToggleTapTimerRef.current = window.setTimeout(() => {
       mobileToggleTapTimerRef.current = null;
       toggleView();
-    }, 250);
+    }, 350);
   };
 
   const handleMobileToggleClick = () => {
-    if (ignoreMobileToggleClickRef.current) {
-      ignoreMobileToggleClickRef.current = false;
+    if (Date.now() < ignoreMobileToggleClickUntilRef.current) {
       return;
     }
 
