@@ -427,8 +427,10 @@ export async function generateHistoricalEventRefill(input: GenerateHistoricalEve
       }
     }
 
-    for (const category of requestedCategories) {
-      selections[category].count = 3;
+    for (const category of HISTORICAL_EVENT_CATEGORIES) {
+      if (requestedCategories.has(category)) {
+        selections[category].count = 3;
+      }
     }
 
     if (weekInfo) {
