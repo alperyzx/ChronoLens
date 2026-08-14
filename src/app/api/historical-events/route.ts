@@ -18,6 +18,7 @@ import {
 import { normalizeCacheDate } from '@/lib/cache-keys';
 import { filterHiddenContent } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from '@/lib/historical-event-categories';
+import { validateHistoricalEventsRequestDate } from '@/lib/historical-events-request-validation';
 import {
   hasMinimumEvents,
   mergeValidatedSelections,
@@ -383,6 +384,14 @@ export async function GET(request: NextRequest) {
         { error: 'Invalid viewType. Must be "today" or "week"' },
         { status: 400 }
       );
+    }
+
+    const dateValidationError = validateHistoricalEventsRequestDate(
+      date,
+      viewType as 'today' | 'week',
+    );
+    if (dateValidationError) {
+      return NextResponse.json({ error: dateValidationError }, { status: 400 });
     }
 
     if (metadataOnly) {
