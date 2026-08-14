@@ -81,6 +81,7 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     /* Disable scroll anchoring globally to prevent layout shift warnings */
     overflow-anchor: none;
+    scrollbar-width: none;
   }
   
   /* Apply scroll anchoring disable to all scrollable containers */
@@ -90,6 +91,10 @@
   }
 
   html::-webkit-scrollbar {
+    display: none;
+  }
+
+  body::-webkit-scrollbar {
     display: none;
   }
 }
