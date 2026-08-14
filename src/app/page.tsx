@@ -1536,7 +1536,7 @@ export default function Home() {
                         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent"></div>
                         
                         {/* Category header */}
-                        <div className="absolute inset-0 flex items-center justify-between p-3 md:p-4">
+                        <div className="absolute left-3 right-3 top-1/3 flex -translate-y-1/2 items-center justify-between md:left-4 md:right-4">
                           <div className="flex w-full min-w-0 items-center space-x-3">
                             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/30 bg-white/20 backdrop-blur-sm md:h-12 md:w-12">
                               {categoryIcons[category as keyof typeof categoryIcons]}
@@ -1545,25 +1545,27 @@ export default function Home() {
                               <h2 className="text-xl font-bold text-white drop-shadow-lg md:text-2xl">
                                 {category}
                               </h2>
-                              {loadingCategories[category] && (
-                                <p className="text-left text-xs text-white/80 md:text-sm">Loading events...</p>
-                              )}
-                              {!loadingCategories[category] && getRenderableEvents(historicalEvents[category]).length > 0 && (
-                                <EventTitlePreview
-                                  key={`${category}-${(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length}`}
-                                  previewKey={`${category}-${(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length}`}
-                                  title={getRenderableEvents(historicalEvents[category])[(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length].title}
-                                />
-                              )}
                             </div>
                           </div>
-                          
                         </div>
+                        {loadingCategories[category] ? (
+                          <p className="absolute left-16 right-3 top-2/3 -translate-y-1/2 text-left text-xs text-white/80 md:left-[4.75rem] md:right-4 md:text-sm">
+                            Loading events...
+                          </p>
+                        ) : getRenderableEvents(historicalEvents[category]).length > 0 ? (
+                          <div className="absolute left-16 right-3 top-2/3 -translate-y-1/2 md:left-[4.75rem] md:right-4">
+                            <EventTitlePreview
+                              key={`${category}-${(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length}`}
+                              previewKey={`${category}-${(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length}`}
+                              title={getRenderableEvents(historicalEvents[category])[(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length].title}
+                            />
+                          </div>
+                        ) : null}
                       </div>
                     </Card>
                   </button>
 
-                  <DialogContent className="flex h-[85vh] w-[90%] max-w-[800px] flex-col gap-0 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-0 shadow-2xl dark:border-white/10 dark:bg-[#121212]">
+                  <DialogContent className="flex h-[85dvh] w-[90%] max-w-[800px] flex-col gap-0 overflow-y-auto rounded-2xl border border-slate-200 bg-slate-50 p-0 shadow-2xl dark:border-white/10 dark:bg-[#121212]">
                     <DialogHeader className="sticky top-0 z-10 flex-row items-center justify-between space-y-0 border-b border-slate-200 bg-slate-50/95 px-5 py-5 text-left backdrop-blur sm:px-8 sm:py-6 dark:border-white/10 dark:bg-[#121212]/95">
                       <div className="flex items-center gap-3">
                         <div
@@ -1579,11 +1581,6 @@ export default function Home() {
                         </div>
                         <div className="min-w-0">
                           <DialogTitle className="text-2xl font-bold text-slate-950 dark:text-slate-50">{category}</DialogTitle>
-                          {loadingCategories[category] && (
-                            <DialogDescription className="mt-1 text-sm font-medium text-slate-600 dark:text-slate-300">
-                              Loading historical events...
-                            </DialogDescription>
-                          )}
                         </div>
                       </div>
                       <div
@@ -1629,6 +1626,9 @@ export default function Home() {
                     <div className="p-5 sm:p-8">
                         {loadingCategories[category] ? (
                           <div className="space-y-3">
+                            <DialogDescription className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                              Loading historical events...
+                            </DialogDescription>
                             {[...Array(3)].map((_, index) => (
                               <div key={index} className="flex space-x-3">
                                 <Skeleton className="h-12 w-12 rounded-lg" />
