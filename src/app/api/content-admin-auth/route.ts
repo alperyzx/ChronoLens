@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyPassword } from '@/lib/content-admin-auth';
+import {
+  CONTENT_ADMIN_SESSION_COOKIE,
+  createAdminSession,
+  hasValidAdminSession,
+  verifyPassword,
+} from '@/lib/content-admin-auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,16 +18,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await verifyPassword(password);
-
-    if (result.valid) {
-      return NextResponse.json({ valid: true, message: result.message });
-    } else {
-      return NextResponse.json(
-        { valid: false, message: result.message, attemptsLeft: result.attemptsLeft },
-        { status: 401 }
-      );
+    if (!verifyPassword(password)) {
+      return NextResponse.json({ authenticated: false, message: 'Invalid credentials' }, { status: 401 });
     }
+
+    const session = createAdminSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Admin authentication is not configured' }, { status: 500 });
+    }
+
+    const response = NextResponse.json({ authenticated: true });
+    response.cookies.set(CONTENT_ADMIN_SESSION_COOKIE, session.token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/',
+      expires: session.expiresAt,
+    });
+    return response;
   } catch (error) {
     console.error('Error verifying password:', error);
     return NextResponse.json(
@@ -32,7 +45,12 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// GET to check if already authenticated (for session validation)
-export async function GET() {
-  return NextResponse.json({ message: 'Use POST to verify password' });
+export async function GET(request: NextRequest) {
+  return NextResponse.json({ authenticated: hasValidAdminSession(request) });
+}
+
+export async function DELETE() {
+  const response = NextResponse.json({ authenticated: false });
+  response.cookies.set(CONTENT_ADMIN_SESSION_COOKIE, '', { httpOnly: true, path: '/', maxAge: 0 });
+  return response;
 }

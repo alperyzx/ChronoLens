@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getReportStats, getAllReportedContent, clearAllReports, recoverReportedContent, isContentHidden } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES } from '@/lib/historical-event-categories';
+import { requireContentAdmin } from '@/lib/content-admin-auth';
 
 export async function GET(request: NextRequest) {
+  const unauthorized = requireContentAdmin(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action');
@@ -32,6 +36,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const unauthorized = requireContentAdmin(request);
+  if (unauthorized) return unauthorized;
+
   try {
     // Clear all reports (admin function)
     await clearAllReports();
@@ -50,6 +57,9 @@ export async function DELETE(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
+  const unauthorized = requireContentAdmin(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const body = await request.json();
     const { title, category, date } = body;

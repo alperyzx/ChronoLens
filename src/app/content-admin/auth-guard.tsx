@@ -15,14 +15,12 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [attemptsLeft, setAttemptsLeft] = useState(2);
 
-  // Check if already authenticated on mount
   useEffect(() => {
-    const authenticated = localStorage.getItem('content-admin-authenticated');
-    if (authenticated === 'true') {
-      setIsAuthenticated(true);
-    }
+    fetch('/api/content-admin-auth')
+      .then(response => response.json())
+      .then(data => setIsAuthenticated(data.authenticated === true))
+      .catch(() => setIsAuthenticated(false));
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,14 +37,12 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
 
       const data = await response.json();
 
-      if (response.ok && data.valid) {
+      if (response.ok && data.authenticated) {
         setIsAuthenticated(true);
-        localStorage.setItem('content-admin-authenticated', 'true');
         setPassword('');
         setError('');
       } else {
         setError(data.message || 'Authentication failed');
-        setAttemptsLeft(data.attemptsLeft || 0);
         setPassword('');
       }
     } catch (err) {
@@ -57,12 +53,11 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await fetch('/api/content-admin-auth', { method: 'DELETE' });
     setIsAuthenticated(false);
-    localStorage.removeItem('content-admin-authenticated');
     setPassword('');
     setError('');
-    setAttemptsLeft(2);
   };
 
   if (!isAuthenticated) {
@@ -107,7 +102,7 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
                       placeholder="Enter password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      disabled={loading || attemptsLeft === 0}
+                      disabled={loading}
                       className="bg-white/50 dark:bg-slate-700/50"
                       autoFocus
                     />
@@ -116,9 +111,7 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
                   {error && (
                     <div
                       className={`p-3 rounded-lg text-sm ${
-                        attemptsLeft === 0
-                          ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700'
-                          : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700'
+                        'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700'
                       }`}
                     >
                       {error}
@@ -127,17 +120,11 @@ export function ContentAdminAuthGuard({ children }: AuthGuardProps) {
 
                   <Button
                     type="submit"
-                    disabled={loading || !password || attemptsLeft === 0}
+                    disabled={loading || !password}
                     className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading ? 'Verifying...' : 'Unlock Admin Panel'}
                   </Button>
-
-                  {attemptsLeft === 0 && (
-                    <div className="text-center text-sm text-slate-600 dark:text-slate-400 pt-2">
-                      Too many attempts. Try again tomorrow.
-                    </div>
-                  )}
                 </form>
               </CardContent>
             </Card>

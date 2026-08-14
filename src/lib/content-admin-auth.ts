@@ -1,142 +1,70 @@
-import fs from 'fs/promises';
-import path from 'path';
-import os from 'os';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
+import { NextResponse, type NextRequest } from 'next/server';
 
-// Get cache directory for auth tracking
-function getAuthCacheDir(): string {
-  const baseDir = process.env.CACHE_DIR || path.join(os.tmpdir(), 'chronolens-cache');
-  return baseDir;
+export const CONTENT_ADMIN_SESSION_COOKIE = 'chronolens_admin_session';
+const SESSION_DURATION_SECONDS = 8 * 60 * 60;
+
+function getAdminPassword(): string | undefined {
+  return process.env.CACHE_ADMIN_PASSWORD;
 }
 
-// Get failed attempts file path for a given day
-function getFailedAttemptsPath(date: string): string {
-  const cacheDir = getAuthCacheDir();
-  return path.join(cacheDir, `_cache_admin_attempts_${date}.json`);
+function signSession(payload: string, secret: string): string {
+  return createHmac('sha256', secret).update(payload).digest('base64url');
 }
 
-// Get today's date in YYYY-MM-DD format
-function getTodayDate(): string {
-  const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(now.getUTCDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+function safeEqual(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-// Ensure cache directory exists
-async function ensureAuthCacheDir(): Promise<void> {
-  const cacheDir = getAuthCacheDir();
-  try {
-    await fs.mkdir(cacheDir, { recursive: true });
-  } catch (error) {
-    console.error('Error creating auth cache directory:', error);
-  }
+export function verifyPassword(inputPassword: string): boolean {
+  const password = getAdminPassword();
+  return Boolean(password && safeEqual(inputPassword, password));
 }
 
-// Get the number of failed attempts today
-export async function getFailedAttempts(): Promise<number> {
-  try {
-    await ensureAuthCacheDir();
-    const today = getTodayDate();
-    const filePath = getFailedAttemptsPath(today);
-
-    try {
-      const content = await fs.readFile(filePath, 'utf8');
-      const data = JSON.parse(content);
-      return data.count || 0;
-    } catch {
-      // File doesn't exist or can't be read, return 0
-      return 0;
-    }
-  } catch (error) {
-    console.error('Error reading failed attempts:', error);
-    return 0;
-  }
-}
-
-// Increment failed attempts
-export async function incrementFailedAttempts(): Promise<number> {
-  try {
-    await ensureAuthCacheDir();
-    const today = getTodayDate();
-    const filePath = getFailedAttemptsPath(today);
-
-    let count = 0;
-    try {
-      const content = await fs.readFile(filePath, 'utf8');
-      const data = JSON.parse(content);
-      count = (data.count || 0) + 1;
-    } catch {
-      count = 1;
-    }
-
-    // Save updated count
-    await fs.writeFile(
-      filePath,
-      JSON.stringify({ count, timestamp: Date.now() }),
-      'utf8'
-    );
-
-    return count;
-  } catch (error) {
-    console.error('Error incrementing failed attempts:', error);
-    return 0;
-  }
-}
-
-// Verify password
-export async function verifyPassword(inputPassword: string): Promise<{ valid: boolean; message: string; attemptsLeft: number }> {
-  const correctPassword = process.env.CACHE_ADMIN_PASSWORD;
-
-  if (!correctPassword) {
-    return {
-      valid: false,
-      message: 'Password not configured',
-      attemptsLeft: 2,
-    };
+export function createAdminSession(): { token: string; expiresAt: Date } | undefined {
+  const password = getAdminPassword();
+  if (!password) {
+    return undefined;
   }
 
-  // Check failed attempts first
-  const failedAttempts = await getFailedAttempts();
-  const maxAttempts = 2;
-
-  if (failedAttempts >= maxAttempts) {
-    return {
-      valid: false,
-      message: `Too many failed attempts. Try again tomorrow.`,
-      attemptsLeft: 0,
-    };
-  }
-
-  // Verify password
-  if (inputPassword === correctPassword) {
-    return {
-      valid: true,
-      message: 'Password correct',
-      attemptsLeft: maxAttempts,
-    };
-  }
-
-  // Wrong password, increment attempts
-  const newCount = await incrementFailedAttempts();
-  const attemptsLeft = maxAttempts - newCount;
-
+  const expiresAt = new Date(Date.now() + SESSION_DURATION_SECONDS * 1000);
+  const payload = `${randomBytes(32).toString('base64url')}.${Math.floor(expiresAt.getTime() / 1000)}`;
   return {
-    valid: false,
-    message: `Incorrect password.${attemptsLeft > 0 ? ` ${attemptsLeft} attempt${attemptsLeft > 1 ? 's' : ''} remaining today.` : ''}`,
-    attemptsLeft,
+    token: `${payload}.${signSession(payload, password)}`,
+    expiresAt,
   };
 }
 
-// Reset failed attempts (can be called manually if needed)
-export async function resetFailedAttempts(): Promise<void> {
-  try {
-    const today = getTodayDate();
-    const filePath = getFailedAttemptsPath(today);
-    await fs.unlink(filePath).catch(() => {
-      // File might not exist, that's fine
-    });
-  } catch (error) {
-    console.error('Error resetting failed attempts:', error);
+export function hasValidAdminSession(request: NextRequest): boolean {
+  const password = getAdminPassword();
+  const token = request.cookies.get(CONTENT_ADMIN_SESSION_COOKIE)?.value;
+  if (!password || !token) {
+    return false;
+  }
+
+  const [nonce, expiresAtRaw, signature] = token.split('.');
+  const expiresAt = Number(expiresAtRaw);
+  if (!nonce || !Number.isFinite(expiresAt) || expiresAt <= Math.floor(Date.now() / 1000) || !signature) {
+    return false;
+  }
+
+  const payload = `${nonce}.${expiresAtRaw}`;
+  return safeEqual(signature, signSession(payload, password));
+}
+
+export function isSameOriginRequest(request: NextRequest): boolean {
+  const origin = request.headers.get('origin');
+  return !origin || origin === request.nextUrl.origin;
+}
+
+export function requireContentAdmin(request: NextRequest): NextResponse | undefined {
+  if (!hasValidAdminSession(request)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method) && !isSameOriginRequest(request)) {
+    return NextResponse.json({ error: 'Invalid request origin' }, { status: 403 });
   }
 }

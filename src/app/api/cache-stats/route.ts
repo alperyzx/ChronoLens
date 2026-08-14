@@ -1,7 +1,11 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getCacheStats, clearCache, cleanupExpiredCache } from '@/lib/cache';
+import { requireContentAdmin } from '@/lib/content-admin-auth';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const unauthorized = requireContentAdmin(request);
+  if (unauthorized) return unauthorized;
+
   try {
     const stats = await getCacheStats();
     return NextResponse.json({
@@ -17,7 +21,10 @@ export async function GET() {
   }
 }
 
-export async function DELETE() {
+export async function DELETE(request: NextRequest) {
+  const unauthorized = requireContentAdmin(request);
+  if (unauthorized) return unauthorized;
+
   try {
     await clearCache();
     return NextResponse.json({
@@ -33,7 +40,10 @@ export async function DELETE() {
   }
 }
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const unauthorized = requireContentAdmin(request);
+  if (unauthorized) return unauthorized;
+
   try {
     await cleanupExpiredCache();
     return NextResponse.json({
