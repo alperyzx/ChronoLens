@@ -378,7 +378,7 @@ export async function listCacheRecords(): Promise<PersistedCacheRecord[]> {
   try {
     await ensureCacheDir();
     const cacheDir = getCacheDir();
-    const files = await fs.readdir(cacheDir);
+    const files = await fs.readdir(/* turbopackIgnore: true */ cacheDir);
     const records: PersistedCacheRecord[] = [];
 
     for (const file of files) {
@@ -456,7 +456,7 @@ export async function clearCache(): Promise<void> {
     const cacheDir = getCacheDir();
     
     try {
-      const files = await fs.readdir(cacheDir);
+      const files = await fs.readdir(/* turbopackIgnore: true */ cacheDir);
       const deletePromises = files
         .filter(file => file.endsWith('.json'))
         .map(file => fs.unlink(path.join(cacheDir, file)));
@@ -483,7 +483,7 @@ export async function cleanupExpiredCache(): Promise<void> {
     const cacheDir = getCacheDir();
     
     try {
-      const files = await fs.readdir(cacheDir);
+      const files = await fs.readdir(/* turbopackIgnore: true */ cacheDir);
       const now = Date.now();
       let deletedCount = 0;
       
@@ -528,7 +528,7 @@ export async function getCacheStats() {
     const stats = await getStats();
     
     try {
-      const files = await fs.readdir(cacheDir);
+      const files = await fs.readdir(/* turbopackIgnore: true */ cacheDir);
       const jsonFiles = files.filter(file => file.endsWith('.json') && !file.startsWith('_cache_stats'));
       const now = Date.now();
       
