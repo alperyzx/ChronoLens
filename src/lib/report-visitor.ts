@@ -35,7 +35,7 @@ export function getVerifiedReportVisitorId(request: NextRequest): string | undef
   return signaturesMatch(signature, sign(payload, secret)) ? visitorId : undefined;
 }
 
-export function createReportVisitorCookie(): { value: string; maxAge: number } | undefined {
+export function createReportVisitorCookie(): { value: string; visitorId: string; expiresAt: number; maxAge: number } | undefined {
   const secret = getSigningSecret();
   if (!secret) {
     return undefined;
@@ -47,6 +47,8 @@ export function createReportVisitorCookie(): { value: string; maxAge: number } |
 
   return {
     value: `${payload}.${sign(payload, secret)}`,
+    visitorId,
+    expiresAt: expiresAt * 1000,
     maxAge: VISITOR_COOKIE_MAX_AGE_SECONDS,
   };
 }
