@@ -1536,9 +1536,9 @@ export default function Home() {
                         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/30 to-transparent"></div>
                         
                         {/* Category header */}
-                        <div className="absolute left-3 right-3 top-1/3 flex -translate-y-1/2 items-center justify-between md:left-4 md:right-4">
-                          <div className="flex w-full min-w-0 items-center space-x-3">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/30 bg-white/20 backdrop-blur-sm md:h-12 md:w-12">
+                        <div className="absolute left-5 right-16 top-1/3 -translate-y-1/2 md:left-4 md:right-4 md:flex md:items-center md:justify-between">
+                          <div className="flex w-full min-w-0 items-center md:space-x-3">
+                            <div className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/30 bg-white/20 backdrop-blur-sm md:flex md:h-12 md:w-12">
                               {categoryIcons[category as keyof typeof categoryIcons]}
                             </div>
                             <div className="min-w-0 flex-1">
@@ -1548,12 +1548,15 @@ export default function Home() {
                             </div>
                           </div>
                         </div>
+                        <div className="absolute right-3 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg border border-white/30 bg-white/20 backdrop-blur-sm md:hidden">
+                          {categoryIcons[category as keyof typeof categoryIcons]}
+                        </div>
                         {loadingCategories[category] ? (
-                          <p className="absolute left-16 right-3 top-2/3 -translate-y-1/2 text-left text-xs text-white/80 md:left-[4.75rem] md:right-4 md:text-sm">
+                          <p className="absolute left-5 right-16 top-2/3 -translate-y-1/2 text-left text-xs text-white/80 md:left-[4.75rem] md:right-4 md:text-sm">
                             Loading events...
                           </p>
                         ) : getRenderableEvents(historicalEvents[category]).length > 0 ? (
-                          <div className="absolute left-16 right-3 top-2/3 -translate-y-1/2 md:left-[4.75rem] md:right-4">
+                          <div className="absolute left-5 right-16 top-2/3 -translate-y-1/2 md:left-[4.75rem] md:right-4">
                             <EventTitlePreview
                               key={`${category}-${(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length}`}
                               previewKey={`${category}-${(eventPreviewIndices[category] ?? 0) % getRenderableEvents(historicalEvents[category]).length}`}
