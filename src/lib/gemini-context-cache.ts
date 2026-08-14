@@ -229,7 +229,7 @@ export async function resolveGeminiContextCache(options: ResolveGeminiContextCac
       updatedAt: new Date().toISOString(),
     };
 
-    registry.entries[options.cacheId] = registryEntry;
+    registry.entries = { ...registry.entries, [options.cacheId]: registryEntry };
 
     await writeRegistry(registry);
     rememberCache(options.cacheId, registryEntry);
@@ -250,7 +250,7 @@ export async function resolveGeminiContextCache(options: ResolveGeminiContextCac
     updatedAt: new Date().toISOString(),
   };
 
-  registry.entries[options.cacheId] = createdEntry;
+  registry.entries = { ...registry.entries, [options.cacheId]: createdEntry };
 
   await writeRegistry(registry);
   rememberCache(options.cacheId, createdEntry);

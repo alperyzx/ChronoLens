@@ -153,7 +153,7 @@ function normalizeSelection(selection: GenerateHistoricalEventsOutput): Generate
 const GenerateHistoricalEventsInputSchema = z.object({
   date: z.string().describe('The anchor date for which to retrieve historical events (YYYY-MM-DD).'),
   viewType: z.enum(['today', 'week']).describe('Whether to generate a single-day or week-based selection.'),
-  category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of historical events to retrieve.'),
+  category: z.enum(HISTORICAL_EVENT_CATEGORIES).describe('The category of historical events to retrieve.'),
 });
 export type GenerateHistoricalEventsInput = z.infer<typeof GenerateHistoricalEventsInputSchema>;
 
@@ -161,7 +161,7 @@ const HistoricalEventSchema = z.object({
   title: z.string().describe('The title of the historical event.'),
   date: z.string().describe('The ISO date string of when the historical event actually occurred (YYYY-MM-DD), using the real historical year, not the request/current date.'),
   description: z.string().describe('A description of the historical event (50-100 words).'),
-  category: z.enum(['Sociology', 'Technology', 'Philosophy', 'Science', 'Politics', 'Art', 'Sports', 'Literature']).describe('The category of the historical event.'),
+  category: z.enum(HISTORICAL_EVENT_CATEGORIES).describe('The category of the historical event.'),
   source: z.string().describe('URL to a reputable source verifying this historical event.'),
   significanceRank: z.coerce.number().int().positive().catch(0).describe('A 1-based ranking where 1 is the most significant event.'),
 });
@@ -178,16 +178,11 @@ const HistoricalEventRefillSchema = z.object({
 const GenerateHistoricalEventsOutputSchema = HistoricalEventSelectionSchema;
 export type GenerateHistoricalEventsOutput = z.infer<typeof GenerateHistoricalEventsOutputSchema>;
 
-const HistoricalEventsByCategorySchema = z.object({
-  Sociology: HistoricalEventSelectionSchema,
-  Technology: HistoricalEventSelectionSchema,
-  Philosophy: HistoricalEventSelectionSchema,
-  Science: HistoricalEventSelectionSchema,
-  Politics: HistoricalEventSelectionSchema,
-  Art: HistoricalEventSelectionSchema,
-  Sports: HistoricalEventSelectionSchema,
-  Literature: HistoricalEventSelectionSchema,
-});
+const HistoricalEventsByCategorySchema = z.object(
+  Object.fromEntries(
+    HISTORICAL_EVENT_CATEGORIES.map(category => [category, HistoricalEventSelectionSchema])
+  ) as Record<HistoricalEventCategory, typeof HistoricalEventSelectionSchema>
+);
 
 export type HistoricalEventsByCategory = z.infer<typeof HistoricalEventsByCategorySchema>;
 
@@ -419,17 +414,32 @@ export async function generateHistoricalEventRefill(input: GenerateHistoricalEve
         HISTORICAL_EVENT_CATEGORIES.includes(category)
       )
     );
-    const selections = emptyCategorySelectionMap();
+    const selectionMap = new Map(
+      HISTORICAL_EVENT_CATEGORIES.map(category => [category, emptyHistoricalEventSelection()] as const)
+    );
 
     for (const event of output?.events || []) {
-      if (requestedCategories.has(event.category)) {
-        selections[event.category].events.push(event);
+      if (!requestedCategories.has(event.category)) {
+        continue;
+      }
+
+      selectionMap.get(event.category)?.events.push(event);
+    }
+
+    for (const category of HISTORICAL_EVENT_CATEGORIES) {
+      if (!requestedCategories.has(category)) {
+        continue;
+      }
+
+      const selection = selectionMap.get(category);
+      if (selection) {
+        selection.count = 3;
       }
     }
 
-    for (const category of requestedCategories) {
-        selections[category].count = 3;
-      }
+    const selections = Object.fromEntries(
+      HISTORICAL_EVENT_CATEGORIES.map(category => [category, selectionMap.get(category) || emptyHistoricalEventSelection()] as const)
+    ) as HistoricalEventsByCategory;
 
     if (weekInfo) {
       return normalizeSelectionsByCategory(filterByDateRangeForCategories(selections, weekInfo.startDate, weekInfo.endDate));
@@ -533,16 +543,9 @@ function emptyHistoricalEventSelection(): GenerateHistoricalEventsOutput {
 }
 
 function emptyCategorySelectionMap(): HistoricalEventsByCategory {
-  return {
-    Sociology: emptyHistoricalEventSelection(),
-    Technology: emptyHistoricalEventSelection(),
-    Philosophy: emptyHistoricalEventSelection(),
-    Science: emptyHistoricalEventSelection(),
-    Politics: emptyHistoricalEventSelection(),
-    Art: emptyHistoricalEventSelection(),
-    Sports: emptyHistoricalEventSelection(),
-    Literature: emptyHistoricalEventSelection(),
-  };
+  return Object.fromEntries(
+    HISTORICAL_EVENT_CATEGORIES.map(category => [category, emptyHistoricalEventSelection()] as const)
+  ) as HistoricalEventsByCategory;
 }
 
 function filterByDateRangeForCategories(
@@ -550,27 +553,19 @@ function filterByDateRangeForCategories(
   startMM_DD: string,
   endMM_DD: string
 ): HistoricalEventsByCategory {
-  return {
-    Sociology: filterSelectionByDateRange(eventsByCategory.Sociology || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
-    Technology: filterSelectionByDateRange(eventsByCategory.Technology || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
-    Philosophy: filterSelectionByDateRange(eventsByCategory.Philosophy || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
-    Science: filterSelectionByDateRange(eventsByCategory.Science || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
-    Politics: filterSelectionByDateRange(eventsByCategory.Politics || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
-    Art: filterSelectionByDateRange(eventsByCategory.Art || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
-    Sports: filterSelectionByDateRange(eventsByCategory.Sports || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
-    Literature: filterSelectionByDateRange(eventsByCategory.Literature || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
-  };
+  return Object.fromEntries(
+    HISTORICAL_EVENT_CATEGORIES.map(category => [
+      category,
+      filterSelectionByDateRange(eventsByCategory[category] || emptyHistoricalEventSelection(), startMM_DD, endMM_DD),
+    ] as const)
+  ) as HistoricalEventsByCategory;
 }
 
 function normalizeSelectionsByCategory(eventsByCategory: HistoricalEventsByCategory): HistoricalEventsByCategory {
-  return {
-    Sociology: normalizeSelection(eventsByCategory.Sociology || emptyHistoricalEventSelection()),
-    Technology: normalizeSelection(eventsByCategory.Technology || emptyHistoricalEventSelection()),
-    Philosophy: normalizeSelection(eventsByCategory.Philosophy || emptyHistoricalEventSelection()),
-    Science: normalizeSelection(eventsByCategory.Science || emptyHistoricalEventSelection()),
-    Politics: normalizeSelection(eventsByCategory.Politics || emptyHistoricalEventSelection()),
-    Art: normalizeSelection(eventsByCategory.Art || emptyHistoricalEventSelection()),
-    Sports: normalizeSelection(eventsByCategory.Sports || emptyHistoricalEventSelection()),
-    Literature: normalizeSelection(eventsByCategory.Literature || emptyHistoricalEventSelection()),
-  };
+  return Object.fromEntries(
+    HISTORICAL_EVENT_CATEGORIES.map(category => [
+      category,
+      normalizeSelection(eventsByCategory[category] || emptyHistoricalEventSelection()),
+    ] as const)
+  ) as HistoricalEventsByCategory;
 }

@@ -474,21 +474,20 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateStr
     throw new Error(result.error);
   }
 
-  const emptyEventsByCategory = HISTORICAL_EVENT_CATEGORIES.reduce((accumulator, currentCategory) => {
-    accumulator[currentCategory] = { count: 0, events: [], visibleEvents: [] };
-    return accumulator;
-  }, {} as HistoricalEventsByCategory);
+  const emptyEventsByCategory = Object.fromEntries(
+    HISTORICAL_EVENT_CATEGORIES.map(category => [category, { count: 0, events: [], visibleEvents: [] }] as const)
+  ) as unknown as HistoricalEventsByCategory;
 
   const eventsByCategory = {
     ...emptyEventsByCategory,
-    ...(Object.entries(result.dataByCategory || {}).reduce((accumulator, [currentCategory, selection]) => {
-      const visibleEvents = result.visibleEventsByCategory?.[currentCategory] || [];
-      accumulator[currentCategory as HistoricalEventCategory] = {
-        ...(selection as HistoricalEventSelection),
-        visibleEvents,
-      };
-      return accumulator;
-    }, {} as Partial<Record<HistoricalEventCategory, HistoricalEventCategoryPayload>>)),
+    ...Object.fromEntries(
+      HISTORICAL_EVENT_CATEGORIES.flatMap(category => {
+        const selection = result.dataByCategory?.[category];
+        return selection
+          ? [[category, { ...(selection as HistoricalEventSelection), visibleEvents: result.visibleEventsByCategory?.[category] || [] }] as const]
+          : [];
+      })
+    ),
   } as HistoricalEventsByCategory;
 
   console.log(`All categories ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
@@ -770,10 +769,7 @@ export default function Home() {
     }
 
     // Initialize loading state for all categories
-    const initialLoadingState: Record<string, boolean> = {};
-    categories.forEach(cat => {
-      initialLoadingState[cat] = true;
-    });
+    const initialLoadingState = Object.fromEntries(categories.map(category => [category, true])) as Record<string, boolean>;
     setLoadingCategories(initialLoadingState);
     
     // Reset cache status
@@ -793,12 +789,7 @@ export default function Home() {
         ...eventsByCategory,
       }));
 
-      setCacheStatus(
-        categories.reduce((accumulator, category) => {
-          accumulator[category] = cached;
-          return accumulator;
-        }, {} as Record<string, boolean>)
-      );
+      setCacheStatus(Object.fromEntries(categories.map(category => [category, cached])) as Record<string, boolean>);
 
       if (!cached && !hasCompleteEvents && shouldKeepWarmupVisible) {
         batchRetryTimerRef.current = window.setTimeout(() => {
@@ -821,12 +812,7 @@ export default function Home() {
       }
 
       if (!shouldKeepWarmupVisible) {
-        setLoadingCategories(
-          categories.reduce((accumulator, category) => {
-            accumulator[category] = false;
-            return accumulator;
-          }, {} as Record<string, boolean>)
-        );
+        setLoadingCategories(Object.fromEntries(categories.map(category => [category, false])) as Record<string, boolean>);
       }
     }
   };
@@ -1558,6 +1544,9 @@ export default function Home() {
                         </div>
                         <div className="min-w-0">
                           <DialogTitle className="text-2xl font-bold text-slate-950 dark:text-slate-50">{category}</DialogTitle>
+                          <DialogDescription className="sr-only">
+                            Historical events in the {category} category for {selectedPeriodLabel}.
+                          </DialogDescription>
                         </div>
                       </div>
                       <div

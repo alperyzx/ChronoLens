@@ -192,14 +192,17 @@ async function reportContentToFileOnly(title: string, category: string, date: st
       cache.reportedContent[contentHash].reportedAt = now;
     } else {
       // New report
-      cache.reportedContent[contentHash] = {
-        title,
-        category,
-        date,
-        reportCount: 1,
-        reportedAt: now,
-        weekNumber: week,
-        year
+      cache.reportedContent = {
+        ...cache.reportedContent,
+        [contentHash]: {
+          title,
+          category,
+          date,
+          reportCount: 1,
+          reportedAt: now,
+          weekNumber: week,
+          year
+        }
       };
     }
     
