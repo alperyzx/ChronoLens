@@ -18,7 +18,6 @@ import {
 } from '@/lib/cache';
 import { normalizeCacheDate } from '@/lib/cache-keys';
 import { filterHiddenContent } from '@/lib/report-cache';
-import { getReportStats } from '@/lib/report-cache';
 import { HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory } from '@/lib/historical-event-categories';
 import {
   hasMinimumEvents,
@@ -32,19 +31,15 @@ const GENERATION_LOCK_POLL_MS = 1000;
 const SOURCE_URL_TIMEOUT_MS = 5000;
 const SOURCE_HTML_PREFIX_BYTES = 16 * 1024;
 
+type CachedBatchResponse = {
+  selections: HistoricalEventsByCategory;
+  visibleEventsByCategory: Record<HistoricalEventCategory, CachedHistoricalEvent[]>;
+};
+
 export const maxDuration = 300;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-function buildReportCacheRevision(stats: Awaited<ReturnType<typeof getReportStats>>): string {
-  return [
-    stats.lastClearYear,
-    stats.lastClearWeek,
-    stats.totalReported,
-    stats.hiddenContent,
-  ].join(':');
 }
 
 function normalizeSourceUrl(source: string): string | undefined {
@@ -162,14 +157,22 @@ async function getCachedSingleCategoryResponse(cacheKey: string): Promise<Cached
     return undefined;
   }
 
-  return (await getVisibleSelection(cachedSelection)).length >= 3 ? cachedSelection : undefined;
+  return cachedSelection;
 }
 
-async function getCachedBatchResponse(date: string, viewType: 'today' | 'week'): Promise<HistoricalEventsByCategory | undefined> {
+async function getCachedBatchResponse(date: string, viewType: 'today' | 'week'): Promise<CachedBatchResponse | undefined> {
   const selectionsByCategory = await getCachedSelectionsByCategory(date, viewType);
   const hasCompleteBatch = HISTORICAL_EVENT_CATEGORIES.every(category => hasMinimumEvents(selectionsByCategory[category]));
+  if (!hasCompleteBatch) {
+    return undefined;
+  }
 
-  return hasCompleteBatch ? selectionsByCategory : undefined;
+  const visibleEventsByCategory = await getVisibleSelectionsByCategory(selectionsByCategory);
+  const hasEnoughVisibleEvents = HISTORICAL_EVENT_CATEGORIES.every(category => visibleEventsByCategory[category].length >= 3);
+
+  return hasEnoughVisibleEvents
+    ? { selections: selectionsByCategory, visibleEventsByCategory }
+    : undefined;
 }
 
 async function getCachedSelectionsByCategory(date: string, viewType: 'today' | 'week'): Promise<HistoricalEventsByCategory> {
@@ -192,14 +195,18 @@ async function getVisibleSelection(selection: CachedHistoricalEventSelection): P
 }
 
 async function getVisibleSelectionsByCategory(selections: HistoricalEventsByCategory): Promise<Record<HistoricalEventCategory, CachedHistoricalEvent[]>> {
-  const visibleSelections = await Promise.all(
-    HISTORICAL_EVENT_CATEGORIES.map(async category => {
-      const selection = selections[category] || { count: 0, events: [] };
-      return [category, await getVisibleSelection(selection)] as const;
-    })
-  );
+  const eventsByCategory = HISTORICAL_EVENT_CATEGORIES.map(category => [
+    category,
+    selections[category]?.events || [],
+  ] as const);
+  const visibleEventSet = new Set(await filterHiddenContent(eventsByCategory.flatMap(([, events]) => events)));
 
-  return Object.fromEntries(visibleSelections) as Record<HistoricalEventCategory, CachedHistoricalEvent[]>;
+  return Object.fromEntries(
+    eventsByCategory.map(([category, events]) => [
+      category,
+      events.filter(event => visibleEventSet.has(event)),
+    ] as const)
+  ) as Record<HistoricalEventCategory, CachedHistoricalEvent[]>;
 }
 
 function emptySelection(): CachedHistoricalEventSelection {
@@ -384,15 +391,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (metadataOnly) {
-      const reportStats = await getReportStats();
-      const reportCacheRevision = buildReportCacheRevision(reportStats);
-
       if (isBatchRequest) {
         const cachedBatchData = await getCachedBatchResponse(date, viewType as 'today' | 'week');
         return NextResponse.json({
           cached: Boolean(cachedBatchData),
           generationRequired: !cachedBatchData,
-          reportCacheRevision,
           scope: 'batch',
         });
       }
@@ -409,7 +412,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         cached: Boolean(cachedData),
         generationRequired: !cachedData,
-        reportCacheRevision,
         scope: 'single',
       });
     }
@@ -418,13 +420,10 @@ export async function GET(request: NextRequest) {
       const cachedBatchData = await getCachedBatchResponse(date, viewType as 'today' | 'week');
 
       if (cachedBatchData) {
-        const visibleEventsByCategory = await getVisibleSelectionsByCategory(cachedBatchData);
-
         return NextResponse.json({
-          dataByCategory: cachedBatchData,
-          visibleEventsByCategory,
+          dataByCategory: cachedBatchData.selections,
+          visibleEventsByCategory: cachedBatchData.visibleEventsByCategory,
           cached: true,
-          reportCacheRevision: buildReportCacheRevision(await getReportStats()),
           timestamp: new Date().toISOString()
         });
       }
@@ -446,7 +445,7 @@ export async function GET(request: NextRequest) {
       const generationPromise = keepGenerationAlive(
         runLockedGeneration<HistoricalEventsByCategory>({
           lockKey,
-          readCachedData: async () => getCachedBatchResponse(date, viewType as 'today' | 'week'),
+          readCachedData: async () => (await getCachedBatchResponse(date, viewType as 'today' | 'week'))?.selections,
           generateFreshData: async () => generateCompleteBatch(
             date,
             viewType as 'today' | 'week',
@@ -484,7 +483,6 @@ export async function GET(request: NextRequest) {
         dataByCategory: eventsByCategory,
         visibleEventsByCategory,
         cached,
-        reportCacheRevision: buildReportCacheRevision(await getReportStats()),
         timestamp: new Date().toISOString()
       });
     }
@@ -507,7 +505,6 @@ export async function GET(request: NextRequest) {
         data: cachedData,
         visibleEvents,
         cached: true,
-        reportCacheRevision: buildReportCacheRevision(await getReportStats()),
         timestamp: new Date().toISOString()
       });
     }
@@ -555,7 +552,6 @@ export async function GET(request: NextRequest) {
       data: events,
       visibleEvents,
       cached,
-      reportCacheRevision: buildReportCacheRevision(await getReportStats()),
       timestamp: new Date().toISOString()
     });
 

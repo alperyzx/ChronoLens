@@ -332,30 +332,6 @@ function setClientCache<T>(key: string, data: T, viewType: 'today' | 'week', rev
   }
 }
 
-async function getReportCacheRevision(date: string, viewType: 'today' | 'week', category?: string): Promise<string | undefined> {
-  const params = new URLSearchParams({
-    date,
-    viewType,
-    metadataOnly: '1',
-  });
-
-  if (category) {
-    params.set('category', category);
-  }
-
-  try {
-    const response = await fetch(`/api/historical-events?${params.toString()}`);
-    if (!response.ok) {
-      return undefined;
-    }
-
-    const payload = await response.json() as { reportCacheRevision?: string };
-    return payload.reportCacheRevision;
-  } catch {
-    return undefined;
-  }
-}
-
 // Category Icons - Modern SVG icons
 const categoryIcons = {
   Sociology: (
@@ -417,23 +393,14 @@ const categoryBackgrounds = {
 async function getHistoricalEventsForCategory(category: string, isTodayView: boolean, dateString: string): Promise<{events: HistoricalEventCategoryPayload, cached: boolean}> {
   const viewType = isTodayView ? 'today' : 'week';
   const clientCacheKey = getClientCacheKey('single', viewType, dateString, category);
-  const reportCacheRevision = await getReportCacheRevision(dateString, viewType, category);
 
   const cachedClientData = getClientCache<HistoricalEventCategoryPayload>(clientCacheKey);
   if (cachedClientData) {
-    const memoryEntry = clientCacheMemory.get(clientCacheKey);
-    if (!reportCacheRevision || memoryEntry?.revision === reportCacheRevision) {
     console.log(`${category} events served from client cache`);
     return {
       events: cachedClientData,
       cached: true,
     };
-    }
-
-    clientCacheMemory.delete(clientCacheKey);
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(clientCacheKey);
-    }
   }
   
   try {
@@ -459,7 +426,7 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
     };
 
     if (payload.count >= MINIMUM_PUBLISHABLE_EVENTS && payload.visibleEvents.length >= MINIMUM_PUBLISHABLE_EVENTS) {
-      setClientCache(clientCacheKey, payload, viewType, result.reportCacheRevision);
+      setClientCache(clientCacheKey, payload, viewType);
     }
     
     return {
@@ -478,12 +445,10 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
 async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateString: string): Promise<{eventsByCategory: HistoricalEventsByCategory, cached: boolean}> {
   const viewType = isTodayView ? 'today' : 'week';
   const clientCacheKey = getClientCacheKey('batch', viewType, dateString);
-  const reportCacheRevision = await getReportCacheRevision(dateString, viewType);
 
   const cachedClientData = getClientCache<HistoricalEventsByCategory>(clientCacheKey);
   if (cachedClientData) {
-    const memoryEntry = clientCacheMemory.get(clientCacheKey);
-    if (hasCompleteHistoricalEventsByCategory(cachedClientData) && (!reportCacheRevision || memoryEntry?.revision === reportCacheRevision)) {
+    if (hasCompleteHistoricalEventsByCategory(cachedClientData)) {
     console.log(`All categories served from client cache`);
     return {
       eventsByCategory: cachedClientData,
@@ -529,7 +494,7 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateStr
   console.log(`All categories ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
 
   if (hasCompleteHistoricalEventsByCategory(eventsByCategory)) {
-    setClientCache(clientCacheKey, eventsByCategory, viewType, result.reportCacheRevision);
+    setClientCache(clientCacheKey, eventsByCategory, viewType);
   }
 
   return {
