@@ -507,7 +507,7 @@ export default function Home() {
   const [isTodayView, setIsTodayView] = useState(true);
   const [selectedDayOffset, setSelectedDayOffset] = useState(0);
   const [selectedWeekOffset, setSelectedWeekOffset] = useState(0);
-  const [navigationRevision, setNavigationRevision] = useState(0);
+  const [hasHydratedNavigation, setHasHydratedNavigation] = useState(false);
   const [historicalEvents, setHistoricalEvents] = useState<CategoryEvents>({});
   const [loadingCategories, setLoadingCategories] = useState<Record<string, boolean>>({});
   const [showGeminiWarmup, setShowGeminiWarmup] = useState(false);
@@ -601,7 +601,7 @@ export default function Home() {
 
   useEffect(() => {
     // Load saved view preference
-    if (typeof window !== "undefined") {
+    try {
       const storedView = localStorage.getItem("isTodayView");
       if (storedView) {
         setIsTodayView(storedView === "true");
@@ -614,6 +614,8 @@ export default function Home() {
       if (storedWeekOffset) {
         setSelectedWeekOffset(Number(storedWeekOffset) || 0);
       }
+    } finally {
+      setHasHydratedNavigation(true);
     }
   }, []);
 
@@ -830,8 +832,12 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (!hasHydratedNavigation) {
+      return;
+    }
+
     void fetchAllEvents();
-  }, [isTodayView, selectedDayOffset, selectedWeekOffset, navigationRevision]);
+  }, [hasHydratedNavigation, isTodayView, selectedDayOffset, selectedWeekOffset]);
 
   const toggleView = () => {
     clearBatchRetryTimer();
@@ -842,9 +848,12 @@ export default function Home() {
     clearBatchRetryTimer();
     batchFetchRequestIdRef.current += 1;
     setShowGeminiWarmup(false);
-    setSelectedDayOffset(0);
-    setSelectedWeekOffset(0);
-    setNavigationRevision(currentRevision => currentRevision + 1);
+    if (isTodayView && selectedDayOffset !== 0) {
+      setSelectedDayOffset(0);
+    }
+    if (!isTodayView && selectedWeekOffset !== 0) {
+      setSelectedWeekOffset(0);
+    }
   };
 
   const handleMobileToggleTouchEnd = (event: TouchEvent<HTMLButtonElement>) => {

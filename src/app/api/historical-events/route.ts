@@ -9,7 +9,6 @@ import {
   acquireCacheLock,
   releaseCacheLock,
   getCacheData, 
-  hasValidCache,
   setCacheData, 
   generateCacheKey, 
   type CacheKey,
@@ -148,10 +147,6 @@ function getGenerationLockKey(date: string, viewType: 'today' | 'week', scope: '
 }
 
 async function getCachedSingleCategoryResponse(cacheKey: string): Promise<CachedHistoricalEventSelection | undefined> {
-  if (!(await hasValidCache(cacheKey))) {
-    return undefined;
-  }
-
   const cachedSelection = await getCacheData(cacheKey);
   if (!hasMinimumEvents(cachedSelection)) {
     return undefined;
