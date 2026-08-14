@@ -56,7 +56,19 @@ export function hasValidAdminSession(request: NextRequest): boolean {
 
 export function isSameOriginRequest(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
-  return !origin || origin === request.nextUrl.origin;
+  if (!origin) {
+    return true;
+  }
+
+  try {
+    const originUrl = new URL(origin);
+    const publicHost = request.headers.get('x-forwarded-host') || request.headers.get('host');
+    const publicProtocol = request.headers.get('x-forwarded-proto') || request.nextUrl.protocol.replace(':', '');
+
+    return originUrl.host === publicHost && originUrl.protocol === `${publicProtocol}:`;
+  } catch {
+    return false;
+  }
 }
 
 export function requireContentAdmin(request: NextRequest): NextResponse | undefined {
