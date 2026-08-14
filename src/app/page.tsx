@@ -1568,7 +1568,7 @@ export default function Home() {
                     </Card>
                   </button>
 
-                  <DialogContent className="flex h-[85dvh] w-[90%] max-w-[800px] flex-col gap-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-2xl border border-slate-200 bg-slate-50 p-0 shadow-2xl dark:border-white/10 dark:bg-[#121212]">
+                  <DialogContent className="flex h-[min(85dvh,900px)] w-[90%] max-w-[800px] flex-col gap-0 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-2xl border border-slate-200 bg-slate-50 p-0 shadow-2xl dark:border-white/10 dark:bg-[#121212]">
                     <DialogHeader className="sticky top-0 z-10 flex-row items-center justify-between space-y-0 border-b border-slate-200 bg-slate-50/95 px-5 py-5 text-left backdrop-blur sm:px-8 sm:py-6 dark:border-white/10 dark:bg-[#121212]/95">
                       <div className="flex items-center gap-3">
                         <div
