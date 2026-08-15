@@ -15,6 +15,9 @@ type MemoryCacheEntry = {
 };
 
 const instanceCache = new Map<string, MemoryCacheEntry>();
+let serverCacheHits = 0;
+let serverCacheMisses = 0;
+let mongoFallbackLookups = 0;
 
 function getMemoryCacheEntry(key: string): fileCache.CachedHistoricalEventSelection | undefined {
   const entry = instanceCache.get(key);
@@ -43,6 +46,12 @@ function clearExpiredMemoryCache(): void {
       instanceCache.delete(key);
     }
   }
+}
+
+function resetServerCacheMetrics(): void {
+  serverCacheHits = 0;
+  serverCacheMisses = 0;
+  mongoFallbackLookups = 0;
 }
 
 function getViewTypeFromCacheKey(key: string): 'today' | 'week' {
@@ -76,15 +85,26 @@ export async function setCacheData(key: string, data: fileCache.CachedHistorical
   return fileCache.setCacheData(key, data, viewType);
 }
 
-export async function getCacheData(key: string): Promise<fileCache.CachedHistoricalEventSelection | undefined> {
+export async function getCacheData(
+  key: string,
+  trackMetrics = true,
+): Promise<fileCache.CachedHistoricalEventSelection | undefined> {
   const memoryData = getMemoryCacheEntry(key);
   if (memoryData) {
+    if (trackMetrics) {
+      serverCacheHits++;
+    }
     return memoryData;
+  }
+
+  if (trackMetrics) {
+    serverCacheMisses++;
   }
 
   if (shouldUseMongoCache()) {
     try {
       await mongoCache.hydrateFromLegacyFileCache();
+      mongoFallbackLookups++;
       const mongoData = await mongoCache.getCacheData(key);
       if (mongoData) {
         setMemoryCacheEntry(key, mongoData, getViewTypeFromCacheKey(key));
@@ -117,56 +137,26 @@ export async function hasValidCache(key: string): Promise<boolean> {
   return fileCache.hasValidCache(key);
 }
 
-export async function clearCache(): Promise<void> {
+/** Clears only this server instance's in-memory cache and its local metrics. */
+export function clearServerCache(): void {
   instanceCache.clear();
-
-  if (shouldUseMongoCache()) {
-    try {
-      await mongoCache.hydrateFromLegacyFileCache();
-      await mongoCache.clearCache();
-    } catch (error) {
-      console.warn('Mongo cache clear failed, falling back to legacy file cache:', error);
-    }
-  }
-
-  return fileCache.clearCache();
+  resetServerCacheMetrics();
 }
 
 export async function getCacheStats() {
   clearExpiredMemoryCache();
+  const lookups = serverCacheHits + serverCacheMisses;
 
-  if (shouldUseMongoCache()) {
-    try {
-      await mongoCache.hydrateFromLegacyFileCache();
-      const remoteStats = await mongoCache.getCacheStats();
-      return {
-        ...remoteStats,
-        keys: remoteStats.keys + instanceCache.size,
-      };
-    } catch (error) {
-      console.warn('Mongo cache stats failed, falling back to legacy file cache:', error);
-    }
-  }
-
-  const fileStats = await fileCache.getCacheStats();
   return {
-    ...fileStats,
-    keys: fileStats.keys + instanceCache.size,
+    entries: instanceCache.size,
+    hits: serverCacheHits,
+    misses: serverCacheMisses,
+    mongoFallbackLookups,
+    hitRate: lookups > 0 ? serverCacheHits / lookups : 0,
   };
 }
 
-// Utility function to clean up expired cache files
-export async function cleanupExpiredCache(): Promise<void> {
+/** Removes expired entries only from this server instance's in-memory cache. */
+export function cleanupExpiredServerCache(): void {
   clearExpiredMemoryCache();
-
-  if (shouldUseMongoCache()) {
-    try {
-      await mongoCache.hydrateFromLegacyFileCache();
-      await mongoCache.cleanupExpiredCache();
-    } catch (error) {
-      console.warn('Mongo cache cleanup failed, falling back to legacy file cache:', error);
-    }
-  }
-
-  return fileCache.cleanupExpiredCache();
 }

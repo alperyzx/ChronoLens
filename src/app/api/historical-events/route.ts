@@ -147,8 +147,11 @@ function getGenerationLockKey(date: string, viewType: 'today' | 'week', scope: '
   return `chronolens_generation_${scope}_${viewType}_${normalizedDate}_${CACHE_VERSION}`;
 }
 
-async function getCachedSingleCategoryResponse(cacheKey: string): Promise<CachedHistoricalEventSelection | undefined> {
-  const cachedSelection = await getCacheData(cacheKey);
+async function getCachedSingleCategoryResponse(
+  cacheKey: string,
+  trackMetrics = true,
+): Promise<CachedHistoricalEventSelection | undefined> {
+  const cachedSelection = await getCacheData(cacheKey, trackMetrics);
   if (!hasMinimumEvents(cachedSelection)) {
     return undefined;
   }
@@ -156,8 +159,12 @@ async function getCachedSingleCategoryResponse(cacheKey: string): Promise<Cached
   return cachedSelection;
 }
 
-async function getCachedBatchResponse(date: string, viewType: 'today' | 'week'): Promise<CachedBatchResponse | undefined> {
-  const selectionsByCategory = await getCachedSelectionsByCategory(date, viewType);
+async function getCachedBatchResponse(
+  date: string,
+  viewType: 'today' | 'week',
+  trackMetrics = true,
+): Promise<CachedBatchResponse | undefined> {
+  const selectionsByCategory = await getCachedSelectionsByCategory(date, viewType, trackMetrics);
   const hasCompleteBatch = HISTORICAL_EVENT_CATEGORIES.every(category => hasMinimumEvents(selectionsByCategory[category]));
   if (!hasCompleteBatch) {
     return undefined;
@@ -171,7 +178,11 @@ async function getCachedBatchResponse(date: string, viewType: 'today' | 'week'):
     : undefined;
 }
 
-async function getCachedSelectionsByCategory(date: string, viewType: 'today' | 'week'): Promise<HistoricalEventsByCategory> {
+async function getCachedSelectionsByCategory(
+  date: string,
+  viewType: 'today' | 'week',
+  trackMetrics = true,
+): Promise<HistoricalEventsByCategory> {
   const entries = await Promise.all(HISTORICAL_EVENT_CATEGORIES.map(async currentCategory => {
     const cacheKey: CacheKey = {
       date,
@@ -180,7 +191,7 @@ async function getCachedSelectionsByCategory(date: string, viewType: 'today' | '
       version: CACHE_VERSION,
     };
 
-    return [currentCategory, await getCachedSingleCategoryResponse(generateCacheKey(cacheKey)) || emptySelection()] as const;
+    return [currentCategory, await getCachedSingleCategoryResponse(generateCacheKey(cacheKey), trackMetrics) || emptySelection()] as const;
   }));
 
   return Object.fromEntries(entries) as HistoricalEventsByCategory;
@@ -396,7 +407,7 @@ export async function GET(request: NextRequest) {
 
     if (metadataOnly) {
       if (isBatchRequest) {
-        const cachedBatchData = await getCachedBatchResponse(date, viewType as 'today' | 'week');
+        const cachedBatchData = await getCachedBatchResponse(date, viewType as 'today' | 'week', false);
         return NextResponse.json({
           cached: Boolean(cachedBatchData),
           generationRequired: !cachedBatchData,
@@ -411,7 +422,7 @@ export async function GET(request: NextRequest) {
         version: CACHE_VERSION,
       };
       const key = generateCacheKey(cacheKey);
-      const cachedData = await getCachedSingleCategoryResponse(key);
+      const cachedData = await getCachedSingleCategoryResponse(key, false);
 
       return NextResponse.json({
         cached: Boolean(cachedData),

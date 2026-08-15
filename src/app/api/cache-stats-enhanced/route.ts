@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCacheStats, clearCache, getCacheExpirationInfo, cleanupExpiredCache } from '@/lib/cache';
+import {
+  cleanupExpiredServerCache,
+  clearServerCache,
+  getCacheExpirationInfo,
+  getCacheStats,
+} from '@/lib/cache';
 import { requireContentAdmin } from '../../../lib/content-admin-auth';
 
 export async function GET(request: NextRequest) {
@@ -10,8 +15,7 @@ export async function GET(request: NextRequest) {
     const stats = await getCacheStats();
     const todayExpiration = getCacheExpirationInfo('today');
     const weekExpiration = getCacheExpirationInfo('week');
-    
-    return NextResponse.json({
+    const response = NextResponse.json({
       ...stats,
       expirationInfo: {
         today: {
@@ -27,6 +31,8 @@ export async function GET(request: NextRequest) {
       },
       timestamp: new Date().toISOString()
     });
+    response.headers.set('Cache-Control', 'no-store, max-age=0');
+    return response;
   } catch (error) {
     console.error('Error getting cache stats:', error);
     return NextResponse.json(
@@ -41,9 +47,9 @@ export async function DELETE(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   try {
-    await clearCache();
+    clearServerCache();
     return NextResponse.json({
-      message: 'Cache cleared successfully',
+      message: 'Server cache cleared successfully',
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -60,10 +66,10 @@ export async function POST(request: NextRequest) {
   if (unauthorized) return unauthorized;
 
   try {
-    await cleanupExpiredCache();
+    cleanupExpiredServerCache();
     const stats = await getCacheStats();
     return NextResponse.json({
-      message: 'Expired cache cleaned up successfully',
+      message: 'Expired server cache entries cleaned up successfully',
       stats,
       timestamp: new Date().toISOString()
     });

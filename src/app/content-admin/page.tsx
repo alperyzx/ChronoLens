@@ -9,15 +9,11 @@ import { Footer } from "@/components/navigation";
 import { ContentAdminAuthGuard } from "./auth-guard";
 
 interface CacheStats {
-  keys: number;
-  expired?: number;
-  totalFiles?: number;
-  totalSizeBytes?: number;
-  totalSizeMB?: number;
+  entries: number;
   hits: number;
   misses: number;
+  mongoFallbackLookups: number;
   hitRate: number;
-  backend?: 'mongodb' | 'file';
   expirationInfo?: {
     today: {
       expiresAt: string;
@@ -69,7 +65,7 @@ export default function ContentAdmin() {
   const fetchStats = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/cache-stats-enhanced');
+      const response = await fetch('/api/cache-stats-enhanced', { cache: 'no-store' });
       if (response.ok) {
         const data = await response.json();
         setStats(data);
@@ -251,7 +247,7 @@ export default function ContentAdmin() {
                 <span>Cache Statistics</span>
               </CardTitle>
               <CardDescription>
-                Performance metrics for the historical events cache
+                Metrics for this server instance&apos;s in-memory cache. MongoDB usage is monitored separately in Google Cloud.
               </CardDescription>
             </CardHeader>
           <CardContent>
@@ -264,41 +260,23 @@ export default function ContentAdmin() {
             ) : stats ? (
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Valid Keys:</span>
-                  <Badge variant="secondary">{stats.keys}</Badge>
+                  <span className="text-sm font-medium">Server Cache Entries:</span>
+                  <Badge variant="secondary">{stats.entries}</Badge>
                 </div>
-                {stats.expired !== undefined && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Expired Keys:</span>
-                    <Badge variant="outline">{stats.expired}</Badge>
-                  </div>
-                )}
-                {stats.totalSizeMB !== undefined && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Cache Size:</span>
-                    <Badge variant="secondary">{stats.totalSizeMB} MB</Badge>
-                  </div>
-                )}
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Cache Hits:</span>
+                  <span className="text-sm font-medium">Server Cache Hits:</span>
                   <Badge variant="default">{stats.hits}</Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Cache Misses:</span>
-                  <Badge variant="outline">{stats.misses}</Badge>
+                  <span className="text-sm font-medium">MongoDB Fallback Lookups:</span>
+                  <Badge variant="outline">{stats.mongoFallbackLookups}</Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium">Hit Rate:</span>
+                  <span className="text-sm font-medium">Server Hit Rate:</span>
                   <Badge variant={stats.hitRate > 0.7 ? "default" : "destructive"}>
                     {(stats.hitRate * 100).toFixed(1)}%
                   </Badge>
                 </div>
-                {stats.backend && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">Storage Backend:</span>
-                    <Badge variant="outline">{stats.backend === 'mongodb' ? 'Firestore Enterprise' : 'File Cache'}</Badge>
-                  </div>
-                )}
                 <div className="text-xs text-muted-foreground">
                   Last updated: {new Date(stats.timestamp).toLocaleString()}
                 </div>
@@ -322,6 +300,16 @@ export default function ContentAdmin() {
                     </div>
                   </div>
                 )}
+                <div className="pt-4 border-t">
+                  <Button
+                    onClick={fetchStats}
+                    disabled={loading}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    {loading ? "Refreshing..." : "Refresh Cache Stats"}
+                  </Button>
+                </div>
               </div>
             ) : (
               <p className="text-muted-foreground">Failed to load cache statistics</p>
@@ -415,23 +403,13 @@ export default function ContentAdmin() {
                 <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
                 </svg>
-                <span>Cache Management</span>
+                <span>Data Management</span>
               </CardTitle>
               <CardDescription>
-                Actions to manage the cache system
+                Server-cache actions. Persistent MongoDB data is never modified here.
               </CardDescription>
             </CardHeader>
           <CardContent className="space-y-4">
-            <div>
-              <Button 
-                onClick={fetchStats} 
-                disabled={loading}
-                className="w-full"
-                variant="outline"
-              >
-                {loading ? "Refreshing..." : "Refresh Cache Stats"}
-              </Button>
-            </div>
             <div>
               <Button 
                 onClick={cleanupExpiredCache} 
@@ -439,10 +417,10 @@ export default function ContentAdmin() {
                 className="w-full mb-2"
                 variant="outline"
               >
-                {cleaning ? "Cleaning..." : "Cleanup Expired Cache"}
+                {cleaning ? "Cleaning..." : "Cleanup Expired Server Cache"}
               </Button>
               <p className="text-xs text-muted-foreground mb-4">
-                Removes only expired cache files while keeping valid ones.
+                Removes expired entries from this server instance only. MongoDB and file-backed data are untouched.
               </p>
             </div>
             <div>
@@ -452,10 +430,10 @@ export default function ContentAdmin() {
                 className="w-full mb-2"
                 variant="destructive"
               >
-                {clearing ? "Clearing..." : "Clear All Cache"}
+                {clearing ? "Clearing..." : "Clear Server Cache"}
               </Button>
               <p className="text-xs text-muted-foreground mb-4">
-                Warning: This will force fresh API calls for all subsequent requests.
+                Clears only this server instance&apos;s memory cache and metrics. MongoDB and file-backed data are untouched.
               </p>
             </div>
           </CardContent>
