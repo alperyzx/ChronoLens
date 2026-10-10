@@ -390,6 +390,31 @@ const categoryBackgrounds = {
   Literature: "linear-gradient(135deg, #5f27cd 0%, #341f97 100%)",
 };
 
+// The API reports failures as a JSON `error` string (bad date, upstream
+// generation failure). Surfacing that beats "API request failed: 400", which
+// says nothing about what the caller got wrong.
+async function readApiError(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    if (typeof body?.error === 'string' && body.error) {
+      return body.error;
+    }
+  } catch {
+    // Non-JSON body; fall through to the status-only message.
+  }
+
+  return `Request failed with status ${response.status}`;
+}
+
+function describeFetchError(error: unknown): string {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Check your connection and try again.";
+  }
+
+  const message = error instanceof Error ? error.message.trim() : "";
+  return message || "Something went wrong. Please try again.";
+}
+
 async function getHistoricalEventsForCategory(category: string, isTodayView: boolean, dateString: string): Promise<{events: HistoricalEventCategoryPayload, cached: boolean}> {
   const viewType = isTodayView ? 'today' : 'week';
   const clientCacheKey = getClientCacheKey('single', viewType, dateString, category);
@@ -403,43 +428,38 @@ async function getHistoricalEventsForCategory(category: string, isTodayView: boo
     };
   }
   
-  try {
-    // Call our cached API endpoint instead of direct AI call
-    const response = await fetch(`/api/historical-events?date=${dateString}&category=${category}&viewType=${viewType}`);
-    
-    if (!response.ok) {
-      throw new Error(`API request failed: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result.error) {
-      throw new Error(result.error);
-    }
-    
-    // Log cache status for monitoring
-    console.log(`${category} events ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
+  // Deliberately not caught here. Swallowing the failure into an empty payload
+  // makes a broken request indistinguishable from a day that genuinely has no
+  // events, so the UI renders "nothing found" instead of an error and never
+  // retries. Let it propagate to the caller, which tells the user.
+  const response = await fetch(`/api/historical-events?date=${dateString}&category=${category}&viewType=${viewType}`);
 
-    const payload: HistoricalEventCategoryPayload = {
-      ...(result.data || { count: 0, events: [] }),
-      visibleEvents: Array.isArray(result.visibleEvents) ? result.visibleEvents : [],
-    };
-
-    if (payload.count >= MINIMUM_PUBLISHABLE_EVENTS && payload.visibleEvents.length >= MINIMUM_PUBLISHABLE_EVENTS) {
-      setClientCache(clientCacheKey, payload, viewType);
-    }
-    
-    return {
-      events: payload,
-      cached: result.cached || false
-    };
-  } catch (error) {
-    console.error(`Failed to fetch events for category: ${category}`, error);
-    return {
-      events: { count: 0, events: [], visibleEvents: [] },
-      cached: false
-    }; // Return empty events array on failure
+  if (!response.ok) {
+    throw new Error(await readApiError(response));
   }
+
+  const result = await response.json();
+
+  if (result.error) {
+    throw new Error(result.error);
+  }
+
+  // Log cache status for monitoring
+  console.log(`${category} events ${result.cached ? 'served from cache' : 'fetched fresh from API'}`);
+
+  const payload: HistoricalEventCategoryPayload = {
+    ...(result.data || { count: 0, events: [] }),
+    visibleEvents: Array.isArray(result.visibleEvents) ? result.visibleEvents : [],
+  };
+
+  if (payload.count >= MINIMUM_PUBLISHABLE_EVENTS && payload.visibleEvents.length >= MINIMUM_PUBLISHABLE_EVENTS) {
+    setClientCache(clientCacheKey, payload, viewType);
+  }
+
+  return {
+    events: payload,
+    cached: result.cached || false
+  };
 }
 
 async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateString: string): Promise<{eventsByCategory: HistoricalEventsByCategory, cached: boolean}> {
@@ -465,7 +485,7 @@ async function getHistoricalEventsForAllCategories(isTodayView: boolean, dateStr
   const response = await fetch(`/api/historical-events?date=${dateString}&viewType=${viewType}`);
 
   if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
+    throw new Error(await readApiError(response));
   }
 
   const result = await response.json();
@@ -733,6 +753,11 @@ export default function Home() {
       }));
     } catch (error) {
       console.error(`Failed to fetch events for ${category}`, error);
+      toast({
+        title: `Couldn't load ${category}`,
+        description: describeFetchError(error),
+        variant: "destructive",
+      });
     } finally {
       setLoadingCategories(prev => ({ ...prev, [category]: false }));
     }
@@ -801,6 +826,18 @@ export default function Home() {
       shouldKeepWarmupVisible = false;
     } catch (error) {
       console.error('Failed to fetch all categories', error);
+      // The finally block leaves the warmup overlay and the per-category
+      // spinners up while this is set, on the assumption that a retry is
+      // already scheduled. A throw means no retry was scheduled, so clear it
+      // or the error toast appears behind a spinner that never resolves.
+      shouldKeepWarmupVisible = false;
+      if (requestId === batchFetchRequestIdRef.current) {
+        toast({
+          title: "Couldn't load events",
+          description: describeFetchError(error),
+          variant: "destructive",
+        });
+      }
     } finally {
       if (requestId !== batchFetchRequestIdRef.current) {
         setLoadingCategories({});

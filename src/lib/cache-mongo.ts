@@ -121,6 +121,11 @@ async function recordStats(delta: { hits?: number; misses?: number }): Promise<v
     }
 
     try {
+      // $inc is already upsert-safe: when the document does not exist Mongo
+      // creates it with the counters set to the increment. Naming the same
+      // fields in $setOnInsert as well makes the update document conflict with
+      // itself, which Mongo rejects up front -- so every stats write failed,
+      // regardless of what was stored.
       await database.collection<CacheStatsDocument>(STATS_COLLECTION).updateOne(
         { _id: STATS_DOC_ID },
         {
@@ -131,25 +136,26 @@ async function recordStats(delta: { hits?: number; misses?: number }): Promise<v
           $set: {
             lastUpdated: new Date(),
           },
-          $setOnInsert: {
-            hits: 0,
-            misses: 0,
-          },
         },
         { upsert: true }
       );
     } catch (innerError) {
-      const msg = innerError && (innerError as Error).message ? (innerError as Error).message : '';
-      if (msg.includes('Path collision')) {
-        console.warn('Mongo cache stats schema collision detected — replacing stats doc with numeric counters.');
-        await database.collection<CacheStatsDocument>(STATS_COLLECTION).replaceOne(
-          { _id: STATS_DOC_ID },
-          { hits: delta.hits ?? 0, misses: delta.misses ?? 0, lastUpdated: new Date() },
-          { upsert: true }
-        );
-      } else {
+      // Last-resort repair for a stats document whose counters are not
+      // numeric, which $inc cannot update in place. This resets the totals, so
+      // it must stay scoped to that one unrecoverable case -- the previous
+      // version also caught the self-inflicted path collision above, which
+      // meant the reset ran on every write and the counters never accumulated.
+      const message = innerError instanceof Error ? innerError.message : '';
+      if (!message.includes('non-numeric type')) {
         throw innerError;
       }
+
+      console.warn('Mongo cache stats counters are non-numeric — resetting them to numeric values.');
+      await database.collection<CacheStatsDocument>(STATS_COLLECTION).replaceOne(
+        { _id: STATS_DOC_ID },
+        { hits: delta.hits ?? 0, misses: delta.misses ?? 0, lastUpdated: new Date() },
+        { upsert: true }
+      );
     }
   } catch (error) {
     console.warn('Mongo cache stats update skipped:', error);
