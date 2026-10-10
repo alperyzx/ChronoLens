@@ -10,6 +10,7 @@
     "start": "next start",
     "lint": "next lint",
     "test:content-refill": "node --experimental-strip-types scripts/verify-content-refill.mjs",
+    "test:request-date": "node --experimental-strip-types scripts/verify-request-date-validation.mjs",
     "test:gemini-cache": "npx --yes tsx scripts/verify-gemini-cache.ts",
     "typecheck": "tsc --noEmit"
   },
