@@ -20,5 +20,16 @@ jobs:
           node-version: 20
       - name: Install
         run: npm ci --prefer-offline
-      - name: Run npm audit
+      # Gate on what actually ships. Build-time-only advisories cannot be
+      # reached by the deployed application, and blocking on them means a
+      # permanently red pipeline that gets ignored -- which hides the
+      # production findings this job exists to catch.
+      - name: Run npm audit (production dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+      # Dev advisories stay visible, just non-blocking. Currently 6 high, all
+      # one chain: tailwindcss@3 -> chokidar/sucrase -> fast-glob -> micromatch
+      # -> braces. Unfixable on Tailwind v3; the chain is gone in v4.
+      - name: Report dev-only advisories (non-blocking)
+        continue-on-error: true
         run: npm audit --audit-level=high
