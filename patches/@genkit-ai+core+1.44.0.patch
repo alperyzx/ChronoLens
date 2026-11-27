@@ -1,0 +1,39 @@
+diff --git a/node_modules/@genkit-ai/core/lib/schema.js b/node_modules/@genkit-ai/core/lib/schema.js
+index dd4b000..4527bec 100644
+--- a/node_modules/@genkit-ai/core/lib/schema.js
++++ b/node_modules/@genkit-ai/core/lib/schema.js
+@@ -41,7 +41,7 @@ module.exports = __toCommonJS(schema_exports);
+ var import_json_schema = require("@cfworker/json-schema");
+ var import_ajv = __toESM(require("ajv"));
+ var import_ajv_formats = __toESM(require("ajv-formats"));
+-var import_zod = require("zod");
++var import_zod = require("zod/v3");
+ var import_zod_to_json_schema = __toESM(require("zod-to-json-schema"));
+ var import_config = require("./config.js");
+ var import_error = require("./error.js");
+diff --git a/node_modules/@genkit-ai/core/lib/schema.mjs b/node_modules/@genkit-ai/core/lib/schema.mjs
+index 05f5662..1736c8d 100644
+--- a/node_modules/@genkit-ai/core/lib/schema.mjs
++++ b/node_modules/@genkit-ai/core/lib/schema.mjs
+@@ -1,7 +1,7 @@
+ import { Validator } from "@cfworker/json-schema";
+ import Ajv from "ajv";
+ import addFormats from "ajv-formats";
+-import { z } from "zod";
++import { z } from "zod/v3";
+ import zodToJsonSchema from "zod-to-json-schema";
+ import { getGenkitRuntimeConfig } from "./config.mjs";
+ import { GenkitError } from "./error.mjs";
+diff --git a/node_modules/@genkit-ai/core/src/schema.ts b/node_modules/@genkit-ai/core/src/schema.ts
+index 67a0e8f..46fb7d1 100644
+--- a/node_modules/@genkit-ai/core/src/schema.ts
++++ b/node_modules/@genkit-ai/core/src/schema.ts
+@@ -17,7 +17,7 @@
+ import { Validator } from '@cfworker/json-schema';
+ import Ajv, { type ErrorObject, type JSONSchemaType } from 'ajv';
+ import addFormats from 'ajv-formats';
+-import { z } from 'zod';
++import { z } from 'zod/v3';
+ import zodToJsonSchema from 'zod-to-json-schema';
+ import { getGenkitRuntimeConfig } from './config.js';
+ import { GenkitError } from './error.js';

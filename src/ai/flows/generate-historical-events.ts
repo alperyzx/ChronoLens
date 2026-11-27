@@ -8,7 +8,12 @@
  */
 
 import {ai} from '@/ai/ai-instance';
-import {z} from 'genkit';
+import {z as genkitZod} from 'genkit';
+import {z as zodV3} from 'zod/v3';
+
+// Genkit 1.44 exposes Zod 4 types, while its JSON-schema converter currently
+// consumes Zod v3 runtime objects. Keep the runtime bridge local to this flow.
+const z = zodV3 as unknown as typeof genkitZod;
 import {getTTLUntilEndOfWeek, getTTLUntilMidnight} from '@/lib/cache-file';
 import {getISOWeekStartDate} from '@/lib/cache-keys';
 import {HISTORICAL_EVENT_CATEGORIES, type HistoricalEventCategory} from '@/lib/historical-event-categories';
@@ -155,7 +160,7 @@ const GenerateHistoricalEventsInputSchema = z.object({
   viewType: z.enum(['today', 'week']).describe('Whether to generate a single-day or week-based selection.'),
   category: z.enum(HISTORICAL_EVENT_CATEGORIES).describe('The category of historical events to retrieve.'),
 });
-export type GenerateHistoricalEventsInput = z.infer<typeof GenerateHistoricalEventsInputSchema>;
+export type GenerateHistoricalEventsInput = genkitZod.infer<typeof GenerateHistoricalEventsInputSchema>;
 
 const HistoricalEventSchema = z.object({
   title: z.string().describe('The title of the historical event.'),
@@ -176,7 +181,7 @@ const HistoricalEventRefillSchema = z.object({
 });
 
 const GenerateHistoricalEventsOutputSchema = HistoricalEventSelectionSchema;
-export type GenerateHistoricalEventsOutput = z.infer<typeof GenerateHistoricalEventsOutputSchema>;
+export type GenerateHistoricalEventsOutput = genkitZod.infer<typeof GenerateHistoricalEventsOutputSchema>;
 
 const HistoricalEventsByCategorySchema = z.object(
   Object.fromEntries(
@@ -184,13 +189,13 @@ const HistoricalEventsByCategorySchema = z.object(
   ) as Record<HistoricalEventCategory, typeof HistoricalEventSelectionSchema>
 );
 
-export type HistoricalEventsByCategory = z.infer<typeof HistoricalEventsByCategorySchema>;
+export type HistoricalEventsByCategory = genkitZod.infer<typeof HistoricalEventsByCategorySchema>;
 
 export type GenerateHistoricalEventRefillInput = {
   date: string;
   viewType: 'today' | 'week';
   categories: HistoricalEventCategory[];
-  excludedEvents: Array<Pick<z.infer<typeof HistoricalEventSchema>, 'category' | 'title' | 'source'>>;
+  excludedEvents: Array<Pick<genkitZod.infer<typeof HistoricalEventSchema>, 'category' | 'title' | 'source'>>;
 };
 
 const SHARED_SINGLE_EVENT_CACHE_INSTRUCTIONS = `You are a passionate historian and educator specializing in the category provided in the live request.
@@ -307,11 +312,11 @@ function extractGeminiText(responseBody: { candidates?: Array<{ content?: { part
   return parts.map(part => part.text || '').join('').trim();
 }
 
-async function generateGeminiJson<T extends z.ZodTypeAny>(options: {
+async function generateGeminiJson<T extends genkitZod.ZodTypeAny>(options: {
   prompt: string;
   cachedContent?: string;
   outputSchema: T;
-}): Promise<z.infer<T> | undefined> {
+}): Promise<genkitZod.infer<T> | undefined> {
   const apiKey = getGeminiApiKey();
 
   if (!apiKey) {
@@ -352,14 +357,14 @@ async function generateGeminiJson<T extends z.ZodTypeAny>(options: {
   return options.outputSchema.parse(parsed);
 }
 
-async function generateHistoricalEventsWithCache<T extends z.ZodTypeAny>(options: {
+async function generateHistoricalEventsWithCache<T extends genkitZod.ZodTypeAny>(options: {
   cacheId: string;
   displayName: string;
   instructions: string;
   prompt: string;
   outputSchema: T;
   ttlSeconds?: number;
-}): Promise<z.infer<T> | undefined> {
+}): Promise<genkitZod.infer<T> | undefined> {
   const cachedContent = await resolveGeminiContextCache({
     cacheId: options.cacheId,
     displayName: options.displayName,
