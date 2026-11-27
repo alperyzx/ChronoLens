@@ -10,7 +10,12 @@
  */
 
 import {ai} from '@/ai/ai-instance';
-import {z} from 'genkit';
+import {z as genkitZod} from 'genkit';
+import {z as zodV3} from 'zod/v3';
+
+// Genkit 1.44 exposes Zod 4 types, while its JSON-schema converter currently
+// consumes Zod v3 runtime objects. Keep the runtime bridge local to this flow.
+const z = zodV3 as unknown as typeof genkitZod;
 
 const SummarizeHistoricalEventsInputSchema = z.object({
   category: z.string().describe('The category of historical events.'),
@@ -23,12 +28,12 @@ const SummarizeHistoricalEventsInputSchema = z.object({
     })
   ).describe('An array of historical events to summarize.'),
 });
-export type SummarizeHistoricalEventsInput = z.infer<typeof SummarizeHistoricalEventsInputSchema>;
+export type SummarizeHistoricalEventsInput = genkitZod.infer<typeof SummarizeHistoricalEventsInputSchema>;
 
 const SummarizeHistoricalEventsOutputSchema = z.object({
   summary: z.string().describe('A summary of the historical events for the given category.'),
 });
-export type SummarizeHistoricalEventsOutput = z.infer<typeof SummarizeHistoricalEventsOutputSchema>;
+export type SummarizeHistoricalEventsOutput = genkitZod.infer<typeof SummarizeHistoricalEventsOutputSchema>;
 
 export async function summarizeHistoricalEvents(input: SummarizeHistoricalEventsInput): Promise<SummarizeHistoricalEventsOutput> {
   return summarizeHistoricalEventsFlow(input);
@@ -76,4 +81,3 @@ const summarizeHistoricalEventsFlow = ai.defineFlow<
     return output!;
   }
 );
-
